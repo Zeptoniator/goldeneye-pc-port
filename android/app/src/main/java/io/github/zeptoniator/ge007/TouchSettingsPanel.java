@@ -47,7 +47,7 @@ public class TouchSettingsPanel extends FrameLayout {
         card.setBackground(bg);
 
         TextView title = new TextView(context);
-        title.setText(R.string.touch_settings_title);
+        title.setText(R.string.opt_title);
         title.setTextColor(Color.WHITE);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         title.setPadding(0, 0, 0, px(6));
@@ -60,12 +60,26 @@ public class TouchSettingsPanel extends FrameLayout {
         card.addView(scroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        addHeader(R.string.opt_game);
+        addSwitch(R.string.opt_invincible, () -> GameOptions.cheat(getContext(), GameOptions.CHEAT_INVINCIBLE),
+                on -> GameOptions.setCheat(getContext(), GameOptions.CHEAT_INVINCIBLE, on), null);
+        addSwitch(R.string.opt_infinite_ammo, () -> GameOptions.cheat(getContext(), GameOptions.CHEAT_INFINITE_AMMO),
+                on -> GameOptions.setCheat(getContext(), GameOptions.CHEAT_INFINITE_AMMO, on), null);
+        addSwitch(R.string.opt_all_guns, () -> GameOptions.cheat(getContext(), GameOptions.CHEAT_ALL_GUNS),
+                on -> GameOptions.setCheat(getContext(), GameOptions.CHEAT_ALL_GUNS, on), null);
+        addSwitch(R.string.opt_auto_aim, () -> GameOptions.nativeGetAutoAim() == 1,
+                GameOptions::nativeSetAutoAim, () -> GameOptions.nativeGetAutoAim() >= 0);
+        addSwitch(R.string.opt_all_unlocked, GameOptions::nativeGetAllUnlocked,
+                GameOptions::nativeSetAllUnlocked, null);
+        addNote(R.string.opt_difficulty_note);
+
+        addHeader(R.string.touch_settings_title);
         addSlider(R.string.touch_look, "lookSens", 25, 300, 100);
         addSlider(R.string.touch_look_y, "lookSensY", 25, 200, 100);
-        addSwitch(R.string.touch_invert_y, "invertY", false);
+        addPrefSwitch(R.string.touch_invert_y, "invertY", false);
         addSlider(R.string.touch_opacity, "opacity", 10, 100, 100);
         addSlider(R.string.touch_size, "size", 70, 150, 100);
-        addSwitch(R.string.touch_haptics, "haptics", true);
+        addPrefSwitch(R.string.touch_haptics, "haptics", true);
 
         LinearLayout actions = new LinearLayout(context);
         actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -75,6 +89,7 @@ public class TouchSettingsPanel extends FrameLayout {
             prefs.edit().clear().apply();
             overlay.resetLayout();
             overlay.loadSettings();
+            GameOptions.applySaved(getContext());   // cheats back off
             rebuildValues();
         }));
         actions.addView(action(R.string.touch_move_buttons, v -> {
@@ -166,20 +181,63 @@ public class TouchSettingsPanel extends FrameLayout {
         rows.addView(row);
     }
 
-    private void addSwitch(int label, String key, boolean def) {
+    private interface BoolGet {
+        boolean get();
+    }
+
+    private interface BoolSet {
+        void set(boolean v);
+    }
+
+    private boolean refreshing;
+
+    private void addPrefSwitch(int label, String key, boolean def) {
+        addSwitch(label, () -> prefs.getBoolean(key, def), on -> {
+            prefs.edit().putBoolean(key, on).apply();
+            overlay.loadSettings();
+        }, null);
+    }
+
+    /** A switch bound to get/set; {@code enabled} null = always enabled. */
+    private void addSwitch(int label, BoolGet get, BoolSet set, BoolGet enabled) {
         Switch sw = new Switch(getContext());
         sw.setText(label);
         sw.setTextColor(0xFFE0E0E0);
         sw.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         sw.setPadding(0, px(8), 0, px(8));
-        Refresh r = () -> sw.setChecked(prefs.getBoolean(key, def));
+        Refresh r = () -> {
+            refreshing = true;
+            sw.setChecked(get.get());
+            sw.setEnabled(enabled == null || enabled.get());
+            refreshing = false;
+        };
         r.run();
         refreshers.add(r);
         sw.setOnCheckedChangeListener((b, on) -> {
-            prefs.edit().putBoolean(key, on).apply();
-            overlay.loadSettings();
+            if (!refreshing) {
+                set.set(on);
+            }
         });
         rows.addView(sw);
+    }
+
+    private void addHeader(int label) {
+        TextView h = new TextView(getContext());
+        h.setText(label);
+        h.setTextColor(0xFF8AB4F8);
+        h.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        h.setAllCaps(true);
+        h.setPadding(0, px(12), 0, px(2));
+        rows.addView(h);
+    }
+
+    private void addNote(int label) {
+        TextView n = new TextView(getContext());
+        n.setText(label);
+        n.setTextColor(0xFF9E9E9E);
+        n.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        n.setPadding(0, px(2), 0, px(6));
+        rows.addView(n);
     }
 
     private Button action(int label, View.OnClickListener l) {

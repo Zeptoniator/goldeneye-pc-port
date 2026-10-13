@@ -178,9 +178,44 @@ typedef struct PortThread {
     unsigned long tid;  /* OS thread id (thread dumps) */
     int started;        /* osStartThread called */
     int exited;         /* entry returned / stopped / parked (idle) */
+    volatile int waiting;  /* savestate freeze: blocked in a queue wait */
+    volatile int parked;   /* savestate freeze: parked at a checkpoint */
 } PortThread;
 
 static PortThread g_pt[PORT_MAX_THREADS];
+
+/* ------------------------------------------------------------------------ */
+/* Savestate freeze (port/src/savestate.c)                                   */
+/*                                                                           */
+/* A savestate copies or overwrites game memory from the main game thread    */
+/* (inside its gfxFrameMsgQ receive). Every other game thread must be still: */
+/* either blocked waiting on a queue (it only touches the queue when it      */
+/* wakes) or parked at a checkpoint at the entry/exit of osRecvMesg /        */
+/* osSendMesg, which every game thread reaches between two pieces of work.   */
+/* The render worker must be idle (it reads the submitted display list).     */
+/* ------------------------------------------------------------------------ */
+static pthread_mutex_t s_frzLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t s_frzCond = PTHREAD_COND_INITIALIZER;
+static int s_frz = 0;                       /* freeze requested (atomic reads) */
+static pthread_t s_frzOwner;
+static __thread PortThread *t_portSelf = NULL; /* game threads only */
+
+static void portFreezeCheckpoint(void)
+{
+    PortThread *me = t_portSelf;
+    if (!me || !__atomic_load_n(&s_frz, __ATOMIC_ACQUIRE) ||
+        pthread_equal(pthread_self(), s_frzOwner)) {
+        return;
+    }
+    pthread_mutex_lock(&s_frzLock);
+    me->parked = 1;
+    pthread_cond_broadcast(&s_frzCond);
+    while (s_frz) {
+        pthread_cond_wait(&s_frzCond, &s_frzLock);
+    }
+    me->parked = 0;
+    pthread_mutex_unlock(&s_frzLock);
+}
 
 /* Side table: OSMesgQueue* -> lock/cond. The game's OSMesgQueue struct has a
  * fixed N64 layout, so the synchronization state lives here instead. */
@@ -412,6 +447,7 @@ static void *portThreadWrapper(void *arg)
 #else
     pt->tid = (unsigned long)pthread_self();
 #endif
+    t_portSelf = pt;
 
     /* The N64 idle thread is an infinite no-yield loop (idleproc). On the
      * host it would just burn a core and nothing depends on it running, so
@@ -611,6 +647,70 @@ void osCreateMesgQueue(OSMesgQueue *mq, OSMesg *first, s32 count)
     (void)portQueueGet(mq); /* register lock/cond */
 }
 
+/* Defined with the render worker / the timers below. */
+static int portRenderWorkerIdle(void);
+static void portForEachTimer(void (*fn)(const void *p, size_t n, void *ctx), void *ctx);
+
+int portFreezeGameThreads(int timeoutMs)
+{
+    const uint64_t deadline = sysGetMicroseconds() + (uint64_t)timeoutMs * 1000u;
+    pthread_mutex_lock(&s_frzLock);
+    s_frzOwner = pthread_self();
+    __atomic_store_n(&s_frz, 1, __ATOMIC_RELEASE);
+    for (;;) {
+        int busy = 0;
+        for (int i = 0; i < PORT_MAX_THREADS; ++i) {
+            PortThread *pt = &g_pt[i];
+            if (!pt->os || !pt->started || pt->exited || pt == t_portSelf) continue;
+            if (!pt->waiting && !pt->parked) { busy = 1; break; }
+        }
+        if (!busy && portRenderWorkerIdle()) {
+            pthread_mutex_unlock(&s_frzLock);
+            return 1;
+        }
+        if (sysGetMicroseconds() >= deadline) {
+            __atomic_store_n(&s_frz, 0, __ATOMIC_RELEASE);
+            pthread_cond_broadcast(&s_frzCond);
+            pthread_mutex_unlock(&s_frzLock);
+            sysLogPrintf(LOG_WARNING, "savestate: game threads did not settle in %d ms", timeoutMs);
+            return 0;
+        }
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_nsec += 1000000;
+        if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
+        pthread_cond_timedwait(&s_frzCond, &s_frzLock, &ts);
+    }
+}
+
+void portThawGameThreads(void)
+{
+    pthread_mutex_lock(&s_frzLock);
+    __atomic_store_n(&s_frz, 0, __ATOMIC_RELEASE);
+    pthread_cond_broadcast(&s_frzCond);
+    pthread_mutex_unlock(&s_frzLock);
+}
+
+/* The kernel objects a savestate must leave alone: every message queue the
+ * port has seen (and its message buffer), every game thread object, every
+ * timer. Their state belongs to this process's threads, not to the game
+ * state being saved or restored. */
+void portForEachKernelObject(void (*fn)(const void *p, size_t n, void *ctx), void *ctx)
+{
+    pthread_mutex_lock(&s_pqLock);
+    for (int i = 0; i < g_pqCount; ++i) {
+        OSMesgQueue *mq = g_pq[i].os;
+        if (!mq) continue;
+        fn(mq, sizeof(*mq), ctx);
+        if (mq->msg && mq->msgCount > 0) fn(mq->msg, sizeof(OSMesg) * (size_t)mq->msgCount, ctx);
+    }
+    pthread_mutex_unlock(&s_pqLock);
+    for (int i = 0; i < PORT_MAX_THREADS; ++i) {
+        if (g_pt[i].os) fn(g_pt[i].os, sizeof(OSThread), ctx);
+    }
+    portForEachTimer(fn, ctx);
+}
+
 OSMesg osDequeueMesg(OSMesgQueue *mq)
 {
     PortQueue *pq = portQueueGet(mq);
@@ -653,6 +753,7 @@ extern void interpPortalOnSend(void *mq, void *msg);   /* D578: port/src/interpp
 
 s32 osSendMesg(OSMesgQueue *mq, OSMesg msg, s32 flag)
 {
+    portFreezeCheckpoint();
     interpPortalOnSend(mq, msg);   /* D578: game-thread snapshot for the portal-scissor replay */
     PortQueue *pq = portQueueGet(mq);
     pthread_mutex_lock(&pq->lock);
@@ -661,7 +762,9 @@ s32 osSendMesg(OSMesgQueue *mq, OSMesg msg, s32 flag)
             pthread_mutex_unlock(&pq->lock);
             return -1;
         }
+        if (t_portSelf) t_portSelf->waiting = 1;
         pthread_cond_wait(&pq->cond, &pq->lock);
+        if (t_portSelf) t_portSelf->waiting = 0;
     }
     mq->msg[(mq->first + mq->validCount) % mq->msgCount] = msg;
     ++mq->validCount;
@@ -674,6 +777,7 @@ extern OSMesgQueue gfxFrameMsgQ; /* src/init.c */
 
 s32 osRecvMesg(OSMesgQueue *mq, OSMesg *msg, s32 flag)
 {
+    portFreezeCheckpoint();
     PortQueue *pq = portQueueGet(mq);
     pthread_mutex_lock(&pq->lock);
     while (mq->validCount == 0) {
@@ -727,7 +831,9 @@ s32 osRecvMesg(OSMesgQueue *mq, OSMesg *msg, s32 flag)
                          (void *)mq, ra,
                          (void *)((uintptr_t)ra - sysImageBase()));
         }
+        if (t_portSelf) t_portSelf->waiting = 1;
         pthread_cond_wait(&pq->cond, &pq->lock);
+        if (t_portSelf) t_portSelf->waiting = 0;
     }
     OSMesg m = mq->msg[mq->first];
     mq->first = (mq->first + 1) % mq->msgCount;
@@ -738,7 +844,20 @@ s32 osRecvMesg(OSMesgQueue *mq, OSMesg *msg, s32 flag)
     /* gfxFrameMsgQ is consumed only by boss.c's game thread. Apply queued
      * F10 watch edits there, after releasing the OS queue lock; the SDL
      * input/scheduler and render threads never touch GE watch/save state. */
+#if defined(PLATFORM_ANDROID)
+    if (mq == &gfxFrameMsgQ) {
+        extern void androidGameTick(void);   /* port/android/android_game.c */
+        androidGameTick();
+    }
+#endif
     if (mq == &gfxFrameMsgQ) watchSettingsGameTick();
+#if defined(PORT_SAVESTATE)
+    if (mq == &gfxFrameMsgQ) {
+        extern void savestateGameTick(void);   /* port/src/savestate.c */
+        savestateGameTick();
+    }
+#endif
+    portFreezeCheckpoint();
     return 0;
 }
 
@@ -1923,6 +2042,13 @@ static void portInterpPresentBeforeDraw(uint64_t viUs)
     }
 }
 
+/* Savestate freeze: no submitted frame (the worker only reads game memory
+ * while drawing one; stored present slots live in its own FBOs). */
+static int portRenderWorkerIdle(void)
+{
+    return __atomic_load_n(&s_rwTask, __ATOMIC_ACQUIRE) == NULL;
+}
+
 static void *portRenderWorker(void *arg)
 {
     (void)arg;
@@ -2188,6 +2314,13 @@ typedef struct PortTimer {
 } PortTimer;
 
 static PortTimer g_ptimers[PORT_MAX_TIMERS];
+
+static void portForEachTimer(void (*fn)(const void *p, size_t n, void *ctx), void *ctx)
+{
+    for (int i = 0; i < PORT_MAX_TIMERS; ++i) {
+        if (g_ptimers[i].os) fn(g_ptimers[i].os, sizeof(OSTimer), ctx);
+    }
+}
 
 /* cycles -> microseconds at the RSP counter rate. Inverse of
  * OS_USEC_TO_CYCLES(). */

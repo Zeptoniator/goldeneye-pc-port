@@ -25,4 +25,25 @@
     <string name="touch_done">Terminé</string>
     <string name="touch_default">Rétablir</string>
     <string name="touch_edit_hint">Faites glisser les boutons à l\'endroit voulu</string>
+    <string name="opt_title">Options</string>
+    <string name="opt_game">Jeu</string>
+    <string name="opt_invincible">Invincibilité</string>
+    <string name="opt_infinite_ammo">Munitions infinies</string>
+    <string name="opt_all_guns">Toutes les armes</string>
+    <string name="opt_auto_aim">Visée automatique (réglage du dossier)</string>
+    <string name="opt_all_unlocked">Tout débloquer (niveaux, Agent 00, mode 007, menu des triches du jeu)</string>
+    <string name="opt_difficulty_note">La difficulté (Agent, Agent secret, Agent 00, et 007 une fois débloqué) se choisit au lancement de chaque mission. Les triches s\'appliquent dès qu\'on est en mission.</string>
+    <string name="ss_title">Sauvegardes</string>
+    <string name="ss_auto">Automatique (en quittant l\'appli)</string>
+    <string name="ss_slot">Emplacement %d</string>
+    <string name="ss_empty">Vide</string>
+    <string name="ss_other_build">Sauvegardé par une autre version de l\'appli</string>
+    <string name="ss_save">Sauver</string>
+    <string name="ss_load">Charger</string>
+    <string name="ss_saving">Sauvegarde…</string>
+    <string name="ss_saved">Sauvegardé.</string>
+    <string name="ss_cannot_save">La sauvegarde se fait pendant une mission solo. Le chargement marche partout.</string>
+    <string name="ss_resume_title">Reprendre la mission ?</string>
+    <string name="ss_resume">Reprendre</string>
+    <string name="ss_resume_no">Non merci</string>
 </resources>

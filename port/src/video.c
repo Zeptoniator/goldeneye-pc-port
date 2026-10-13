@@ -1668,7 +1668,17 @@ void videoCopyFramebuffer(s32 dst, s32 src, s32 left, s32 top)
     gfx_copy_framebuffer(dst, src, left, top, false);
 }
 
+static SDL_atomic_t s_stageLoads;
+
 void videoResetTextureCache(void)
 {
     gfx_texture_cache_clear();
+    SDL_AtomicAdd(&s_stageLoads, 1);
+}
+
+/* How many times the texture cache was reset: boss.c does it once per stage
+ * load, so the savestate loader (port/src/savestate.c) can wait for one. */
+int videoStageLoadCount(void)
+{
+    return SDL_AtomicGet(&s_stageLoads);
 }

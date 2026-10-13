@@ -26,4 +26,25 @@
     <string name="touch_done">Done</string>
     <string name="touch_default">Reset</string>
     <string name="touch_edit_hint">Drag the buttons where you want them</string>
+    <string name="opt_title">Options</string>
+    <string name="opt_game">Game</string>
+    <string name="opt_invincible">Invincibility</string>
+    <string name="opt_infinite_ammo">Infinite ammo</string>
+    <string name="opt_all_guns">All guns</string>
+    <string name="opt_auto_aim">Auto-aim (Bond file setting)</string>
+    <string name="opt_all_unlocked">Unlock everything (levels, 00 Agent, 007 mode, game cheat menu)</string>
+    <string name="opt_difficulty_note">The difficulty (Agent, Secret Agent, 00 Agent, and 007 once unlocked) is chosen when you pick a mission. Cheats apply from the next moment in a mission.</string>
+    <string name="ss_title">Saves</string>
+    <string name="ss_auto">Automatic (when leaving the app)</string>
+    <string name="ss_slot">Slot %d</string>
+    <string name="ss_empty">Empty</string>
+    <string name="ss_other_build">Saved by another version of the app</string>
+    <string name="ss_save">Save</string>
+    <string name="ss_load">Load</string>
+    <string name="ss_saving">Saving…</string>
+    <string name="ss_saved">Saved.</string>
+    <string name="ss_cannot_save">Saving works during a solo mission. Loading works anywhere.</string>
+    <string name="ss_resume_title">Resume the mission?</string>
+    <string name="ss_resume">Resume</string>
+    <string name="ss_resume_no">No thanks</string>
 </resources>

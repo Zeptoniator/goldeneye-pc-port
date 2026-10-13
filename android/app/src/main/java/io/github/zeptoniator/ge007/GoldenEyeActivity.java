@@ -30,6 +30,7 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
     private static Vibrator vibrator;
     private TouchOverlay overlay;
     private TouchSettingsPanel settings;
+    private SaveStatesPanel saves;
     private InputManager inputManager;
 
     @Override
@@ -52,7 +53,22 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
             settings = new TouchSettingsPanel(this, overlay);
             mLayout.addView(settings, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            overlay.setListener(() -> settings.show());
+            saves = new SaveStatesPanel(this, overlay);
+            mLayout.addView(saves, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            overlay.setListener(new TouchOverlay.Listener() {
+                @Override
+                public void onOpenSettings() {
+                    settings.show();
+                }
+
+                @Override
+                public void onOpenSaves() {
+                    saves.show();
+                }
+            });
+            GameOptions.applySaved(this);
+            offerResume();
             inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
             inputManager.registerInputDeviceListener(this, new Handler(Looper.getMainLooper()));
             updateOverlayForControllers();
@@ -74,6 +90,10 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
             settings.hide();
             return;
         }
+        if (saves != null && saves.isOpen()) {
+            saves.hide();
+            return;
+        }
         if (overlay != null && overlay.isEditing()) {
             overlay.setEditMode(false);
             return;
@@ -83,6 +103,41 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
         }
         overlay.pressStart(true);
         ui.postDelayed(() -> overlay.pressStart(false), 120);
+    }
+
+    // ------------------------------------------- autosave / resume
+
+    @Override
+    protected void onPause() {
+        // Leaving the screen during a mission: keep it in the automatic slot,
+        // offered back if the app is started again (Android may close a
+        // background app at any time). Done before SDL pauses the game.
+        if (overlay != null) {
+            if (SaveStates.nativeCanSave()) {
+                SaveStates.saveAndWait(this, SaveStates.AUTO, 1500);
+            } else if (!SaveStates.nativeBusy()) {
+                // Not in a mission (front end): nothing to resume later.
+                //noinspection ResultOfMethodCallIgnored
+                SaveStates.file(this, SaveStates.AUTO).delete();
+            }
+        }
+        super.onPause();
+    }
+
+    /** At launch: a mission left by closing the app can be resumed. */
+    private void offerResume() {
+        java.io.File auto = SaveStates.file(this, SaveStates.AUTO);
+        long[] info = SaveStates.nativePeek(auto.getPath());
+        if (info == null || info[0] != 1) {
+            return;
+        }
+        String what = SaveStates.describe(this, info);
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(R.string.ss_resume_title)
+                .setMessage(what)
+                .setPositiveButton(R.string.ss_resume, (d, w) -> SaveStates.nativeLoad(auto.getPath()))
+                .setNegativeButton(R.string.ss_resume_no, null)
+                .show();
     }
 
     @Override

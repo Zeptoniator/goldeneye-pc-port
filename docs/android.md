@@ -83,7 +83,8 @@ rings stay readable on snow and night levels.
 | OK / BACK | A / B | menus |
 | Pause icon, or the Back gesture | Start | always (watch / pause) |
 | ≡ | Back | always (PC options overlay) |
-| Gear | — | always: touch settings |
+| Gear | — | always: options (game, touch) |
+| Disk | — | always: saves |
 
 **Touch settings** (gear): look sensitivity, vertical look, invert vertical,
 button opacity and size, vibration on press, **move buttons** (drag any
@@ -92,6 +93,55 @@ button of either set; Reset / Done), defaults. Stored in the app's
 
 The N64 Rumble Pak drives the phone's vibrator. A real controller hides the
 overlay and takes over (SDL hot-plug, untested so far).
+
+## Saves at any moment (savestates)
+
+The disk button opens **Saves**: three slots plus an **automatic** one.
+Saving works during a solo mission, loading anywhere (front end included).
+Leaving the app during a mission writes the automatic slot; at the next
+launch the game offers to **resume** it (Android may close a background app
+at any time, which used to restart the game from the intro). Files:
+`data/states/{auto,slot1..3}.ge7s` (~0.8 MB each). The Bond file saves
+(EEPROM) stay the reference: after a load they are re-read from disk, so an
+old state never erases mission progress saved since.
+
+`port/src/savestate.c` (Android on by default; `-DGE_SAVESTATE=ON` on Linux):
+
+- **What is saved:** the N64 DRAM arena (8 MB, fixed address in the window)
+  and the game's own globals, gathered by `port/savestate.ld` into
+  `.ge_state_data`/`.ge_state_bss` (src/game, the engine files with game
+  state, libaudio; not init.c/sched.c/joy.c/stacks.c, not the port). zlib,
+  written by a background thread.
+- **When:** on the main game thread inside its `gfxFrameMsgQ` receive (where
+  the F10 watch edits already apply), with the other game threads frozen:
+  `portFreezeGameThreads()` (libultra.c) waits until each one is blocked on a
+  queue or parked at a checkpoint at the entry/exit of `osRecvMesg`/
+  `osSendMesg`, and the render worker has no frame.
+- **Load, in two steps:** the saved stage is first loaded the normal way
+  (`g_MainStageNum`, as the front end does) so the port's per-stage state
+  matches it; at its first frame the saved memory replaces the fresh one.
+  Every message queue, thread object and timer of the running process is kept
+  (`portForEachKernelObject`). Android loads `libmain.so` at a random address:
+  8-byte words that pointed into the saving process's image are moved by the
+  difference. Texture cache reset; interpolation treats it as a cut.
+- **Limits:** solo only; a state loads only in the build that wrote it
+  (layout fingerprint).
+- **Test hooks:** `--ss-save <file> [--ss-save-tick n]`,
+  `--ss-load <file> [--ss-load-tick n]`. Verified headless on Linux: Bunker 1,
+  scripted walk through the door and four shots, saved, then a new process
+  from the title loads it: same place, 3 rounds left, same bullet holes, runs
+  on.
+
+## Game options
+
+In the gear panel, section **Game**: **Invincibility**, **Infinite ammo**,
+**All guns** (the game's own cheats, switched on through its in-mission
+cheat path and re-applied at each stage start; switching one off only
+removes what the panel turned on), **Auto-aim** (the Bond file's watch
+setting) and **Unlock everything** (the port's `Game.AllUnlocked`: every
+level, 00 Agent, 007 mode and the game's Cheat menu). The difficulty is
+chosen at mission select, as on the N64. All requests are applied on the game
+thread (`port/android/android_game.c`, the same rule as watchsettings.c).
 
 ## How it works (what differs from Linux)
 

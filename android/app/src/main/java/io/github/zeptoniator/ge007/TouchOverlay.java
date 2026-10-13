@@ -46,8 +46,8 @@ public class TouchOverlay extends View {
             BTN_START = 6, BTN_LEFTSTICK = 7, BTN_LEFTSHOULDER = 9, BTN_RIGHTSHOULDER = 10,
             BTN_DPAD_UP = 11, BTN_DPAD_DOWN = 12, BTN_DPAD_LEFT = 13, BTN_DPAD_RIGHT = 14;
     static final int AXIS_LEFTX = 0, AXIS_LEFTY = 1, AXIS_TRIGGERLEFT = 4, AXIS_TRIGGERRIGHT = 5;
-    /** Not a pad button: opens the settings panel. */
-    private static final int BTN_SETTINGS = -2;
+    /** Not pad buttons: open the settings / the savestate panel. */
+    private static final int BTN_SETTINGS = -2, BTN_SAVES = -3;
 
     static native void nativeAxis(int axis, int value);
     static native void nativeButton(int button, boolean down);
@@ -66,11 +66,13 @@ public class TouchOverlay extends View {
     // Icons (drawn in drawIcon).
     private static final int IC_BULLET = 1, IC_AIM = 2, IC_HAND = 3, IC_RELOAD = 4, IC_GUN = 5,
             IC_WATCH = 6, IC_CROUCH = 7, IC_PAUSE = 8, IC_MENU = 9, IC_GEAR = 10, IC_OK = 11,
-            IC_BACK = 12;
+            IC_BACK = 12, IC_DISK = 13;
 
-    /** Opens the settings panel (GoldenEyeActivity). */
+    /** Opens the settings / savestate panels (GoldenEyeActivity). */
     public interface Listener {
         void onOpenSettings();
+
+        void onOpenSaves();
     }
 
     /** A round button. {@code axis} >= 0 makes it a trigger (full deflection when down). */
@@ -205,6 +207,7 @@ public class TouchOverlay extends View {
         buttons.add(new Button("START", "", IC_PAUSE, ALWAYS, BTN_START, -1, false, false, white, 44, 0.11f, 22));
         buttons.add(new Button("MENU", "", IC_MENU, ALWAYS, BTN_BACK, -1, false, false, white, -96, 0.11f, 20));
         buttons.add(new Button("SETTINGS", "", IC_GEAR, ALWAYS, BTN_SETTINGS, -1, false, false, white, -42, 0.11f, 20));
+        buttons.add(new Button("SAVES", "", IC_DISK, ALWAYS, BTN_SAVES, -1, false, false, white, -150, 0.11f, 20));
 
         setOnApplyWindowInsetsListener((v, insets) -> {
             readCutout(insets);
@@ -414,10 +417,14 @@ public class TouchOverlay extends View {
     private void pointerDown(int id, float x, float y) {
         for (Button b : buttons) {
             if (shown(b) && b.pointer < 0 && b.hit(x, y)) {
-                if (b.button == BTN_SETTINGS) {
+                if (b.button == BTN_SETTINGS || b.button == BTN_SAVES) {
                     feedback();
                     if (listener != null) {
-                        listener.onOpenSettings();
+                        if (b.button == BTN_SETTINGS) {
+                            listener.onOpenSettings();
+                        } else {
+                            listener.onOpenSaves();
+                        }
                     }
                     return;
                 }
@@ -490,7 +497,7 @@ public class TouchOverlay extends View {
         lookers.clear();
         for (Button b : buttons) {
             b.pointer = -1;
-            if (b.button != BTN_SETTINGS) {
+            if (b.button >= 0 || b.axis >= 0) {
                 setButton(b, false);
             }
         }
@@ -831,6 +838,24 @@ public class TouchOverlay extends View {
                 }
                 path.close();
                 path.addCircle(x, y, 0.2f * h, Path.Direction.CCW);
+                path.setFillType(Path.FillType.EVEN_ODD);
+                c.drawPath(path, inkFill);
+                path.setFillType(Path.FillType.WINDING);
+                break;
+            }
+            case IC_DISK: {
+                // Floppy disk: body with a notched corner, shutter, label.
+                path.reset();
+                path.moveTo(x - 0.55f * h, y - 0.55f * h);
+                path.lineTo(x + 0.35f * h, y - 0.55f * h);
+                path.lineTo(x + 0.55f * h, y - 0.35f * h);
+                path.lineTo(x + 0.55f * h, y + 0.55f * h);
+                path.lineTo(x - 0.55f * h, y + 0.55f * h);
+                path.close();
+                rect.set(x - 0.3f * h, y - 0.55f * h, x + 0.22f * h, y - 0.18f * h);
+                path.addRect(rect, Path.Direction.CCW);
+                rect.set(x - 0.35f * h, y + 0.08f * h, x + 0.35f * h, y + 0.55f * h);
+                path.addRect(rect, Path.Direction.CCW);
                 path.setFillType(Path.FillType.EVEN_ODD);
                 c.drawPath(path, inkFill);
                 path.setFillType(Path.FillType.WINDING);

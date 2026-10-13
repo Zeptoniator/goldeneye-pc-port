@@ -971,6 +971,25 @@ set(SRC
 # Target
 # ----------------------------------------------------------------------------
 set(BIN_NAME "ge007${BIN_REGION}.${TARGET_ARCH}")
+# Savestates (port/src/savestate.c): the game's globals are gathered into two
+# sections by port/savestate.ld. On for Android (where the app is closed and
+# reopened all the time); opt-in elsewhere (-DGE_SAVESTATE=ON, Linux only).
+if(ANDROID)
+  set(_ge_savestate_default ON)
+else()
+  set(_ge_savestate_default OFF)
+endif()
+option(GE_SAVESTATE "Savestates (port/src/savestate.c, port/savestate.ld)" ${_ge_savestate_default})
+if(GE_SAVESTATE AND (ANDROID OR (UNIX AND NOT APPLE)))
+  add_definitions(-DPORT_SAVESTATE=1)
+  set(_ge_ss_ld "-Wl,-T,${CMAKE_SOURCE_DIR}/port/savestate.ld")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${_ge_ss_ld}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_ge_ss_ld}")
+  message(STATUS "Savestates: on")
+else()
+  list(REMOVE_ITEM SRC "${CMAKE_SOURCE_DIR}/port/src/savestate.c")
+endif()
+
 if(ANDROID)
   # SDLActivity loads "libmain.so" and calls SDL_main (main.c's main(),
   # renamed by SDL_main.h). The JNI bridge for the touch overlay and the data
