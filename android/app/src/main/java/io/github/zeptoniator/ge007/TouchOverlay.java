@@ -58,6 +58,7 @@ public class TouchOverlay extends View {
     static native void nativeSetEnabled(boolean on);
     /** 0 = front end, 1 = playing, 2 = watch / pause (port/src/input.c). */
     static native int nativeContext();
+    static native boolean nativeHasGadget();
     static native void nativePointer(int x, int y, int action);
     static native void nativeOptionsScroll(int steps);
 
@@ -168,6 +169,7 @@ public class TouchOverlay extends View {
     private int context = IN_MENU;
     private boolean inStage;          // in a mission (playing, or its watch open)
     private boolean watchOpen;        // the watch / pause screen of a mission
+    private boolean gadgetReady;      // Bond carries a gadget for B to select
     private final Runnable contextPoll = new Runnable() {
         @Override
         public void run() {
@@ -176,6 +178,11 @@ public class TouchOverlay extends View {
             boolean stage = n == 1 || n == 2;
             if (stage != inStage) {
                 inStage = stage;
+                invalidate();
+            }
+            boolean gadget = n == 1 && nativeHasGadget();
+            if (gadget != gadgetReady) {
+                gadgetReady = gadget;
                 invalidate();
             }
             boolean watch = n == 2;
@@ -518,6 +525,9 @@ public class TouchOverlay extends View {
     private void pointerDown(int id, float x, float y) {
         for (Button b : buttons) {
             if (shown(b) && b.pointer < 0 && b.hit(x, y)) {
+                if (b.icon == IC_GADGET && !gadgetReady) {
+                    return;   // disabled: nothing to select, and the touch is not a look
+                }
                 if (b.button == BTN_SETTINGS || b.button == BTN_SAVES) {
                     feedback();
                     if (listener != null) {
@@ -878,8 +888,10 @@ public class TouchOverlay extends View {
      * held (gold means on), the icon black on it. All five share one size.
      */
     private void drawShortcut(Canvas c, Button b) {
+        // Unavailable is disabled, never hidden: B with no gadget to select.
+        boolean disabled = b.icon == IC_GADGET && !gadgetReady && !editMode;
         // Gold means on: held, or Start while the watch it opened is up.
-        boolean on = b.down || (editMode && b == dragged) || (b.button == BTN_START && watchOpen);
+        boolean on = !disabled && (b.down || (editMode && b == dragged) || (b.button == BTN_START && watchOpen));
         float half = 20 * dp * sizeScale;
         rect.set(b.cx - half, b.cy - half, b.cx + half, b.cy + half);
         fill.setColor(on ? alpha(Titles.GOLD, 1f) : alpha(0xA607070A, 1f));
@@ -887,13 +899,15 @@ public class TouchOverlay extends View {
         Paint outline = editMode ? dash : ring;
         float sw = outline.getStrokeWidth();
         outline.setStrokeWidth(1 * dp);
-        outline.setColor(editMode ? 0xFFFFFFFF : on ? alpha(Titles.GOLD, 1f) : alpha(0xB3F2E6C9, 1f));
+        outline.setColor(editMode ? 0xFFFFFFFF : on ? alpha(Titles.GOLD, 1f)
+                : disabled ? alpha(0x668A8170, 1f) : alpha(0xB3F2E6C9, 1f));
         rect.inset(0.5f * dp, 0.5f * dp);
         c.drawRect(rect, outline);
         outline.setStrokeWidth(sw);
         // Start opens Bond's watch in a mission: show the watch there.
         int icon = b.button == BTN_START && inStage ? IC_WATCH : b.icon;
-        drawTileIcon(c, icon, b.cx, b.cy, 2 * half, on ? Titles.BLACK : alpha(Titles.IVORY, 1f));
+        drawTileIcon(c, icon, b.cx, b.cy, 2 * half,
+                on ? Titles.BLACK : disabled ? alpha(0x668A8170, 1f) : alpha(Titles.IVORY, 1f));
     }
 
     /**

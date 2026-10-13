@@ -2243,6 +2243,41 @@ int inputTouchContext(void)
  * equippable inventory gadget using the game's normal weapon-switch path;
  * never conjure a missing item or touch the N64 game logic. The first press
  * from a gun selects the lowest gadget; the next press wraps the list. */
+#if defined(PLATFORM_ANDROID)
+/* On-screen controls: whether B (the gadget cycle below) has anything to
+ * select, so its tile can show itself disabled. Computed here on the input
+ * thread, where the inventory is read safely; read by the UI thread through
+ * android_touch.c (a plain int, a stale answer lasts one poll). */
+static volatile int s_touchHasGadget;
+
+int inputTouchHasGadget(void)
+{
+    return s_touchHasGadget;
+}
+
+static void inputTouchUpdateGadget(void)
+{
+    int has = 0;
+    struct player *p = (!inputMpSplit() && inputTouchContext() == 1) ? slotPlayer() : NULL;
+    if (p && p->ptr_inventory_first_in_cycle) {
+        InvItem *head = p->ptr_inventory_first_in_cycle;
+        InvItem *item = head;
+        int guard = 0;
+        do {
+            if (item->type == INV_ITEM_WEAPON) {
+                int id = item->type_inv_item.type_weap.weapon;
+                if (id >= ITEM_BOMBCASE && id <= ITEM_WATCHMAGNETATTRACT) {
+                    has = 1;
+                    break;
+                }
+            }
+            item = item->next;
+        } while (item && item != head && ++guard < 128);
+    }
+    s_touchHasGadget = has;
+}
+#endif
+
 static void inputCycleGadget(void)
 {
     if (inputMpSplit()) return;   /* D419: acts on g_CurrentPlayer; solo only */
@@ -3032,6 +3067,9 @@ static unsigned inputComputePadSlot(int idx, signed char *stick_x, signed char *
             button = po.button;
             if (po.crouch) crouchNow = 1;
             if (po.gadgetEdge) inputCycleGadget();
+#if defined(PLATFORM_ANDROID)
+            if (idx == 0) inputTouchUpdateGadget();
+#endif
             padActPrev[idx] = po.actHeld;
         }
 

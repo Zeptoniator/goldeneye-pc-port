@@ -26,6 +26,7 @@
 #include <stdlib.h>
 
 int inputTouchContext(void); /* port/src/input.c */
+int inputTouchHasGadget(void); /* port/src/input.c */
 
 #define TOUCH_NBUTTONS (SDL_CONTROLLER_BUTTON_DPAD_RIGHT + 1)
 
@@ -230,6 +231,14 @@ Java_io_github_zeptoniator_ge007_TouchOverlay_nativeSetEnabled(JNIEnv *env, jcla
 {
     (void)env; (void)cls;
     SDL_AtomicSet(&s_wanted, on ? 1 : 0);
+}
+
+/* Bond carries a gadget B can select (the B tile is disabled otherwise). */
+JNIEXPORT jboolean JNICALL
+Java_io_github_zeptoniator_ge007_TouchOverlay_nativeHasGadget(JNIEnv *env, jclass cls)
+{
+    (void)env; (void)cls;
+    return inputTouchHasGadget() ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jint JNICALL

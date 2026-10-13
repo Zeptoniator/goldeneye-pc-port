@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-13T19:30:00+02:00",
+  "generatedAt": "2026-10-13T22:00:00+02:00",
   "title": "Design System: GoldenEye 007 (Android)",
   "extensions": {
     "colorMeta": {
@@ -116,6 +116,22 @@
         "tonalRamp": [
           "#07070a9e"
         ]
+      },
+      "tile-field": {
+        "role": "neutral",
+        "displayName": "Tile Field",
+        "canonical": "#07070aa6",
+        "tonalRamp": [
+          "#07070aa6"
+        ]
+      },
+      "tile-hairline": {
+        "role": "neutral",
+        "displayName": "Tile Hairline",
+        "canonical": "#f2e6c9b3",
+        "tonalRamp": [
+          "#f2e6c9b3"
+        ]
       }
     },
     "typographyMeta": {
@@ -193,6 +209,10 @@
       {
         "name": "phone-landscape",
         "value": "landscape only; panel inset 88dp sides, 16dp top and bottom"
+      },
+      {
+        "name": "touch-overlay",
+        "value": "full screen over the game; corner shortcuts 24dp from the top and side edges, 40dp x size tiles, 16dp gaps"
       }
     ]
   },
@@ -252,18 +272,27 @@
       "description": "The panel body head: Michroma title tracked 0.42 over a grey tracked subtitle, under the gold top rule.",
       "html": "<section class=\"ds-panel\"><h1 class=\"ds-title\">Commandes</h1><p class=\"ds-sub\">Visée, boutons, vibration</p></section>",
       "css": ".ds-panel{background:#07070a;border-top:2px solid #d9a441;padding:24px 32px}.ds-title{margin:0;min-height:40px;color:#f2e6c9;font-family: Michroma, sans-serif; text-transform: uppercase;font-weight:400;font-size:30px;letter-spacing:0.42em;white-space:nowrap;animation:ds-credit .22s cubic-bezier(0,0,.2,1)}.ds-sub{margin:0;min-height:24px;color:#8a8170;font-family:sans-serif;font-size:12px;letter-spacing:0.2em;text-transform:uppercase}@keyframes ds-credit{from{opacity:0;letter-spacing:0.92em}to{opacity:1;letter-spacing:0.42em}}@media (prefers-reduced-motion:reduce){.ds-title{animation:none}}"
+    },
+    {
+      "name": "Shortcut Tile",
+      "kind": "button",
+      "refersTo": "shortcut-tile",
+      "description": "The touch overlay's corner shortcuts: flat translucent square keys, ivory hairline and pictogram; gold with a black pictogram while held or while Start's watch is up.",
+      "html": "<div class=\"ds-tiles\"><button class=\"ds-tile\" aria-label=\"Options\"><svg viewBox=\"0 0 40 40\" width=\"40\" height=\"40\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\"><circle cx=\"20\" cy=\"20\" r=\"6.2\"/><circle cx=\"20\" cy=\"20\" r=\"2.2\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(0 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(45 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(90 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(135 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(180 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(225 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(270 20 20)\"/><rect x=\"18.6\" y=\"10.3\" width=\"2.8\" height=\"3.7\" fill=\"currentColor\" stroke=\"none\" transform=\"rotate(315 20 20)\"/></svg></button><button class=\"ds-tile ds-f10\" aria-label=\"F10\">F10</button><button class=\"ds-tile\" aria-label=\"Saves\"><svg viewBox=\"0 0 40 40\" width=\"40\" height=\"40\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\"><path d=\"M10 10H26L30 14V30H10Z\"/><rect x=\"15\" y=\"10\" width=\"8\" height=\"6\"/><rect x=\"14\" y=\"21.5\" width=\"12\" height=\"8.5\"/></svg></button><button class=\"ds-tile ds-tile-on\" aria-label=\"Watch\"><svg viewBox=\"0 0 40 40\" width=\"40\" height=\"40\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\"><rect x=\"16.2\" y=\"10\" width=\"7.6\" height=\"3.8\" fill=\"currentColor\" stroke=\"none\"/><rect x=\"16.2\" y=\"26.2\" width=\"7.6\" height=\"3.8\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"20\" cy=\"20\" r=\"6.2\"/><path d=\"M20 20V16.2M20 20H23\"/></svg></button></div>",
+      "css": ".ds-tiles{display:flex;gap:16px;padding:24px;background:#5a6470}.ds-tile{width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;background:#07070aa6;color:#f2e6c9;border:1px solid #f2e6c9b3;border-radius:0}.ds-f10{font-family:Michroma,sans-serif;font-size:7.2px;letter-spacing:0.05em}.ds-tile:active,.ds-tile-on{background:#d9a441;border-color:#d9a441;color:#07070a}.ds-tile:focus-visible{outline:1px solid #d9a441;outline-offset:2px}"
     }
   ],
   "narrative": {
     "northStar": "Opening Titles",
-    "overview": "The app's in-game panels read like a spy film's opening credits: a near-black field laid over the still-running mission, section names set as wide-tracked capital credits, and a clean list of settings beneath them. Gold is light catching the screen: it marks only what is on, what is active, and the one action that returns the player to the mission. Everything else is ivory on black or a muted credit grey.\n\nDensity is calm but quick. Every target is 48 dp, every row is a single line of plain sans text with its control at the right edge, and the panel leaves the game visible on both sides. Depth comes from black on a dimmed game, never from shadows; form is square and flat throughout. The world refuses the grey Android settings card and the neon gaming HUD.\n\nScope: this system covers the two in-game panels, Options (gear, `TouchSettingsPanel`) and Saves (`SaveStatesPanel`), built from the shared tokens in `Titles.java`. The setup screen (`SetupActivity`), the touch overlay (`TouchOverlay`) and the licences dialog (`Licences`) are not yet in this world; they keep their earlier look until they are brought over. The PC port's F10 overlay is the game's own UI and is outside this system.",
+    "overview": "The app's in-game panels read like a spy film's opening credits: a near-black field laid over the still-running mission, section names set as wide-tracked capital credits, and a clean list of settings beneath them. Gold is light catching the screen: it marks only what is on, what is active, and the one action that returns the player to the mission. Everything else is ivory on black or a muted credit grey.\n\nDensity is calm but quick. Every target is 48 dp, every row is a single line of plain sans text with its control at the right edge, and the panel leaves the game visible on both sides. Depth comes from black on a dimmed game, never from shadows; form is square and flat throughout. The world refuses the grey Android settings card and the neon gaming HUD.\n\nScope: this system covers the two in-game panels, Options (gear, `TouchSettingsPanel`) and Saves (`SaveStatesPanel`), and the touch overlay's five corner shortcuts (`TouchOverlay`: options, F10, saves, gadget, start / watch), all built from the shared tokens in `Titles.java`. The rest of the touch overlay (the round action buttons, the stick, the menu OK / BACK and the edit-mode pills) keeps its own look and is not in this world; only its placement on the watch screen follows this system. The setup screen (`SetupActivity`) and the licences dialog (`Licences`) are not yet in this world either. The PC port's F10 overlay is the game's own UI and is outside this system.",
     "keyCharacteristics": [
       "Near-black panel over a 62 % scrim of the running game, gold 2 dp rule along its top edge.",
       "Michroma credits (wide-tracked capitals) for section titles, rail entries and the primary action only.",
       "System sans for everything read; values in tabular figures with their unit.",
       "Gold reserved for on, active and the primary action; red only for a destructive action awaiting confirmation.",
       "Square, flat, outlined controls on an 8 dp grid; 48 dp targets.",
-      "One signature motion: a title replays as a credit, its tracking closing from wide to set."
+      "One signature motion: a title replays as a credit, its tracking closing from wide to set.",
+      "Over the running game, the menus are reached through flat square keys (Shortcut Tiles), never round discs: square says \"menu\", round says \"action\"."
     ],
     "rules": [
       {
@@ -278,7 +307,7 @@
       },
       {
         "name": "The Credits Only Rule",
-        "body": "Michroma is for credit titles, rail credits and the primary action. A label, value, note or secondary button in Michroma is wrong.",
+        "body": "Michroma is for credit titles, rail credits and the primary action, plus one sanctioned key cap: \"F10\" on its Shortcut Tile (the PC key's name, sized to 0.18 of the tile side, tracking 0.05). A label, value, note or secondary button in Michroma is wrong.",
         "section": "typography"
       },
       {
@@ -298,10 +327,11 @@
       "**Do** use gold only for on, active and the primary action; one primary button per panel.",
       "**Do** set titles in Michroma and fit them to their line; set everything read in the system sans with tabular figures.",
       "**Do** make destructive actions take two taps, the armed state in red for 3 s.",
-      "**Do** honour the system's animation setting: every transition has an instant path."
+      "**Do** honour the system's animation setting: every transition has an instant path.",
+      "**Do** set every corner shortcut as a Shortcut Tile, one shared size, and keep the watch face clear (OK / BACK to the right margin, no resting stick) while the watch is up."
     ],
     "donts": [
-      "**Don't** round anything: no pills, no rounded cards, no circular thumbs.",
+      "**Don't** round anything: no pills, no rounded cards, no circular thumbs, no round shortcut discs (a circle drawn inside a pictogram is allowed).",
       "**Don't** add shadows, glows, gradients or grain.",
       "**Don't** use Michroma for labels, values, notes or secondary buttons.",
       "**Don't** use red for anything but a destructive action awaiting confirmation.",
