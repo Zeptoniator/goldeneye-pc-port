@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Barrel rings -->
+    <path android:fillColor="#00000000" android:strokeColor="#E8E8E8" android:strokeWidth="2.2"
+        android:pathData="M54,22a32,32 0,1 1,0 64a32,32 0,1 1,0 -64z" />
+    <path android:fillColor="#00000000" android:strokeColor="#BDBDBD" android:strokeWidth="2"
+        android:pathData="M55.5,29a25,25 0,1 1,0 50a25,25 0,1 1,0 -50z" />
+    <path android:fillColor="#00000000" android:strokeColor="#9A9A9A" android:strokeWidth="1.8"
+        android:pathData="M56.5,36a18,18 0,1 1,0 36a18,18 0,1 1,0 -36z" />
+    <path android:fillColor="#00000000" android:strokeColor="#7A7A7A" android:strokeWidth="1.6"
+        android:pathData="M57.2,43a11,11 0,1 1,0 22a11,11 0,1 1,0 -22z" />
+    <!-- Target dot -->
+    <path android:fillColor="#C62828"
+        android:pathData="M57.6,49.5a4.5,4.5 0,1 1,0 9a4.5,4.5 0,1 1,0 -9z" />
+</vector>

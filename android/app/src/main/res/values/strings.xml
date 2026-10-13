@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GoldenEye 007</string>
+    <string name="setup_intro">This app contains no game data. Pick your own GoldenEye 007 ROM (USA, .z64, .v64 or .n64): it is checked, copied into the app and converted once on this device (a few seconds).</string>
+    <string name="setup_pick">Choose the ROM…</string>
+    <string name="setup_checking">Checking the ROM…</string>
+    <string name="setup_preparing">Preparing the game data…</string>
+    <string name="setup_step_models">Converting models…</string>
+    <string name="setup_step_stages">Converting levels…</string>
+    <string name="setup_step_setups">Converting level setups…</string>
+    <string name="setup_read_failed">The file could not be read.</string>
+    <string name="setup_not_rom">This file is not an N64 ROM.</string>
+    <string name="setup_wrong_rom">This is not the supported ROM: this build needs GoldenEye 007 (USA). Its SHA-1 is checked so that a bad or different dump cannot crash the game later.</string>
+    <string name="setup_write_failed">The ROM could not be saved in the app\'s storage.</string>
+    <string name="setup_convert_failed">The conversion failed. Details below.</string>
+</resources>

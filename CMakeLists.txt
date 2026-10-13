@@ -24,7 +24,10 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 # (GCC does hard-error on the one struct that declares a member with the same
 # name as an inherited one — CCTVRecord's `pad` — see docs/internals.md.)
 # An explicit -DCMAKE_C_COMPILER=... always wins.
-if(NOT DEFINED CMAKE_C_COMPILER)
+# Android: the NDK toolchain file (passed by Gradle, or by
+# scripts/android/build-native.sh) brings its own clang; never go looking for
+# a host gcc there.
+if(NOT DEFINED CMAKE_C_COMPILER AND NOT DEFINED ANDROID_ABI)
   if(CMAKE_HOST_APPLE)
     # Homebrew installs real GNU GCC with a version suffix; /usr/bin/gcc is
     # Apple Clang and does not support the Plan 9 struct extensions required
@@ -88,6 +91,22 @@ endif()
 # (port/src/romassets_<region>.s, see scripts/gen_romassets.py).
 project(ge007 C CXX ASM)
 
+# Android: SDL2 is built from source next to the game (SDLActivity, the Java
+# side, loads libSDL2.so then libmain.so). Added here, before any of the
+# directory-wide flags, include paths and shims below, which are for the game
+# only (the decomp's <sched.h>/<stdlib.h> shims would shadow SDL's headers).
+# GE_SDL2_SOURCE_DIR comes from android/app/build.gradle or
+# scripts/android/build-native.sh.
+if(ANDROID)
+  if(NOT GE_SDL2_SOURCE_DIR OR NOT EXISTS "${GE_SDL2_SOURCE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "Android build: set GE_SDL2_SOURCE_DIR to an SDL2 2.x source tree")
+  endif()
+  set(SDL_SHARED ON CACHE BOOL "" FORCE)
+  set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+  set(SDL_TEST OFF CACHE BOOL "" FORCE)
+  add_subdirectory("${GE_SDL2_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/SDL2" EXCLUDE_FROM_ALL)
+endif()
+
 # Debug gate: validate every u32 -> host-pointer conversion against the regions
 # the port actually maps, and report offenders at the conversion site with a
 # backtrace. Off by default (zero cost); enable with -DPORT_ADDR_STRICT=ON.
@@ -150,6 +169,14 @@ message(STATUS "Target arch: ${TARGET_ARCH} (64bit=${TARGET_IS_64BIT})")
 # cart pairing (romdata.c CART_HOST vs romassets_*.s values) agrees.
 if(APPLE AND TARGET_ARCH MATCHES "^aarch64$")
   set(PORT_ADDR_BASE 0x100000000000 CACHE STRING "Host base of the N64 address window (arm64 macOS)")
+elseif(ANDROID)
+  # Android: the game is a shared library (libmain.so) loaded at a random
+  # address by an app process whose low 4 GiB already hold the ART heap and
+  # boot image (around 0x12c00000 and 0x70000000), so the N64 window cannot
+  # sit at 0 as on Linux. Shift it like arm64 macOS, but to 256 GiB: arm64
+  # Android kernels commonly give user space only 39 bits (512 GiB), which
+  # rules out macOS's 16 TiB. See docs/android.md.
+  set(PORT_ADDR_BASE 0x4000000000 CACHE STRING "Host base of the N64 address window (Android)")
 else()
   set(PORT_ADDR_BASE 0x0 CACHE STRING "Host base of the N64 address window")
 endif()
@@ -158,6 +185,8 @@ if(WIN32)
   set(TARGET_OS "windows")
 elseif(APPLE)
   set(TARGET_OS "osx")
+elseif(ANDROID)
+  set(TARGET_OS "android")
 elseif(UNIX)
   set(TARGET_OS "linux")
 else()
@@ -225,6 +254,17 @@ configure_file(
 # the toolchain include dir from the compiler location (MinGW/MSYS2 layout:
 # bin/../include) and generate an absolute-path include.
 get_filename_component(_PORT_GCC_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
+if(ANDROID)
+  # NDK: the libc headers live in the toolchain sysroot, not next to clang.
+  set(_PORT_NDK_SYSROOT "${CMAKE_SYSROOT}")
+  if(NOT _PORT_NDK_SYSROOT)
+    set(_PORT_NDK_SYSROOT "${ANDROID_TOOLCHAIN_ROOT}/sysroot")
+  endif()
+  set(_PORT_NDK_INC "${_PORT_NDK_SYSROOT}/usr/include")
+  if(NOT EXISTS "${_PORT_NDK_INC}/string.h")
+    message(FATAL_ERROR "Cannot locate the NDK sysroot headers (${_PORT_NDK_INC})")
+  endif()
+endif()
 if(APPLE)
   execute_process(
     COMMAND xcrun --show-sdk-path
@@ -234,6 +274,8 @@ if(APPLE)
     message(FATAL_ERROR "Cannot locate the macOS SDK; install the Xcode Command Line Tools")
   endif()
   set(PORT_HOST_STRING_H "${_PORT_MACOS_SDK}/usr/include/string.h")
+elseif(ANDROID)
+  set(PORT_HOST_STRING_H "${_PORT_NDK_INC}/string.h")
 else()
   get_filename_component(PORT_HOST_STRING_H "${_PORT_GCC_DIR}/../include/string.h" ABSOLUTE)
 endif()
@@ -247,6 +289,8 @@ configure_file(
 # sched_yield). Both MinGW and Linux keep <sched.h> at bin/../include.
 if(APPLE)
   set(PORT_HOST_SCHED_H "${_PORT_MACOS_SDK}/usr/include/sched.h")
+elseif(ANDROID)
+  set(PORT_HOST_SCHED_H "${_PORT_NDK_INC}/sched.h")
 else()
   get_filename_component(PORT_HOST_SCHED_H "${_PORT_GCC_DIR}/../include/sched.h" ABSOLUTE)
 endif()
@@ -261,6 +305,8 @@ configure_file(
 # TUs to the host header by absolute path (same trick as hoststring.h).
 if(APPLE)
   set(PORT_HOST_STDLIB_H "${_PORT_MACOS_SDK}/usr/include/stdlib.h")
+elseif(ANDROID)
+  set(PORT_HOST_STDLIB_H "${_PORT_NDK_INC}/stdlib.h")
 else()
   get_filename_component(PORT_HOST_STDLIB_H "${_PORT_GCC_DIR}/../include/stdlib.h" ABSOLUTE)
 endif()
@@ -276,7 +322,16 @@ configure_file(
 execute_process(
   COMMAND "${CMAKE_C_COMPILER}" -print-file-name=include/stddef.h
   OUTPUT_VARIABLE _PORT_GCC_STDDEF OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-if(_PORT_GCC_STDDEF AND EXISTS "${_PORT_GCC_STDDEF}")
+if(ANDROID)
+  # clang keeps stddef.h in its resource directory.
+  execute_process(
+    COMMAND "${CMAKE_C_COMPILER}" -print-resource-dir
+    OUTPUT_VARIABLE _PORT_CLANG_RES OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  set(PORT_HOST_STDDDEF_H "${_PORT_CLANG_RES}/include/stddef.h")
+  if(NOT EXISTS "${PORT_HOST_STDDDEF_H}")
+    message(FATAL_ERROR "Cannot locate clang's stddef.h (${PORT_HOST_STDDDEF_H})")
+  endif()
+elseif(_PORT_GCC_STDDEF AND EXISTS "${_PORT_GCC_STDDEF}")
   get_filename_component(PORT_HOST_STDDDEF_H "${_PORT_GCC_STDDEF}" ABSOLUTE)
 else()
   get_filename_component(PORT_HOST_STDDDEF_H "${_PORT_GCC_DIR}/../include/stddef.h" ABSOLUTE)
@@ -325,6 +380,16 @@ add_compile_options(
 # swept first — tracked in docs/dev/findings.md.
 if(NOT GE_STACK_PROTECTOR_ALL)
   add_compile_options(-fno-stack-protector)
+endif()
+if(ANDROID)
+  # The NDK turns on _FORTIFY_SOURCE, whose bionic headers need SSIZE_MAX and
+  # redeclare str*/mem* as overloadable; the decomp's own <limits.h> and the
+  # port's prototypes shadow both. Same reasoning as the stack protector
+  # above: run the game code the way the other ports do.
+  add_compile_options(-U_FORTIFY_SOURCE)
+  # The NDK also makes -Wformat-security an error; the decomp passes text
+  # bank strings as printf formats (e.g. gunfire.c), as it does everywhere.
+  add_compile_options(-Wno-error=format-security)
 endif()
 # Keep frame pointers: dbghelp's StackWalk64 (crash handler + thread dumps)
 # cannot read DWARF unwind info on MinGW, so the EBP chain is the only way to
@@ -386,6 +451,24 @@ if(NOT MINGW)
     # downgrades them to warnings — the C counterpart of the -Wno-error lines
     # above, and the documented path for building older C against GCC 14+.
     add_compile_options($<$<COMPILE_LANGUAGE:C>:-fpermissive>)
+  elseif(ANDROID)
+    # The NDK only ships clang. -fms-extensions makes `inherits Base;` an
+    # unnamed member whose fields are reached directly (obj->type), which is
+    # all the idiom needs here: the base is always the FIRST member, so the
+    # Plan 9 automatic base-pointer conversion degenerates to a same-address
+    # pointer conversion, which clang accepts with a warning. clang's
+    # counterparts of GCC's -fpermissive follow (each a hard error by default
+    # in recent clang, a warning in IDO and older compilers).
+    add_compile_options(
+      $<$<COMPILE_LANGUAGE:C>:-fms-extensions>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-microsoft-anon-tag>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-error=incompatible-function-pointer-types>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-error=implicit-int>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-error=return-mismatch>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-error=int-conversion>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-error=incompatible-pointer-types>
+      $<$<COMPILE_LANGUAGE:C>:-Wno-error=implicit-function-declaration>
+    )
   endif()
 endif()
 
@@ -399,6 +482,16 @@ endif()
 # base at startup.
 if(MINGW)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--disable-dynamicbase")
+elseif(ANDROID)
+  # Android loads the game as a position-independent shared library at a
+  # random address: no fixed image base is possible. The absolute symbols
+  # move with the shifted window instead (PORT_ADDR_BASE above; generated
+  # below), and the image is reached through the 0x40000000 image-relative
+  # encoding exactly as on Windows/macOS (portaddr.h, g_portUseImageRel).
+  # The version script keeps every symbol but the entry points local, so
+  # lld resolves the absolute symbols at link time: bionic would otherwise
+  # add the load bias to a preemptible SHN_ABS symbol.
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_SOURCE_DIR}/port/android/libmain.map -Wl,-z,max-page-size=16384")
 elseif(UNIX AND NOT APPLE)
   # Linux equivalent of the ASLR-off requirement above: dram_syms.s defines
   # absolute symbols at 0x70000000 referenced through pointer-typed externs. A
@@ -468,12 +561,18 @@ include_directories(
 # ----------------------------------------------------------------------------
 set(LIBS "")
 
-find_package(SDL2 REQUIRED)
-include_directories(SYSTEM "${SDL2_INCLUDE_DIR}")
-list(APPEND LIBS "${SDL2_LIBRARY}")
+if(ANDROID)
+  # Built at the top of this file (before the game's global flags).
+  include_directories(SYSTEM "${GE_SDL2_SOURCE_DIR}/include")
+  list(APPEND LIBS SDL2::SDL2)
+else()
+  find_package(SDL2 REQUIRED)
+  include_directories(SYSTEM "${SDL2_INCLUDE_DIR}")
+  list(APPEND LIBS "${SDL2_LIBRARY}")
+endif()
 
 find_package(ZLIB REQUIRED)
-if(ZLIB_INCLUDE_DIR)
+if(ZLIB_INCLUDE_DIR AND NOT ANDROID) # NDK: zlib.h is in the sysroot already
   include_directories(SYSTEM "${ZLIB_INCLUDE_DIR}")
 endif()
 list(APPEND LIBS "${ZLIB_LIBRARY}")
@@ -496,7 +595,10 @@ configure_file(
   "${CMAKE_BINARY_DIR}/port/include/realzlib.h" @ONLY)
 
 if(NOT GL_LIBRARY)
-  if(WIN32)
+  if(ANDROID)
+    # GLES is reached through SDL_GL_GetProcAddress (glad); EGL is SDL's.
+    set(GL_LIBRARY GLESv3)
+  elseif(WIN32)
     set(GL_LIBRARY opengl32)
   elseif(APPLE)
     set(GL_LIBRARY "-framework OpenGL")
@@ -514,6 +616,8 @@ if(NOT EXTRA_LIBRARIES)
     set(EXTRA_LIBRARIES dbghelp -static-libstdc++)
   elseif(APPLE)
     set(EXTRA_LIBRARIES stdc++ m pthread)
+  elseif(ANDROID)
+    set(EXTRA_LIBRARIES log android m dl)
   else()
     set(EXTRA_LIBRARIES stdc++ m dl pthread)
   endif()
@@ -614,6 +718,45 @@ if(APPLE)
     VERBATIM)
   set_source_files_properties(${SRC_ROMASSETS} ${SRC_DRAM_SYMS_EXPANDED} ${SRC_DRAM_SYMS}
     PROPERTIES GENERATED TRUE)
+elseif(ANDROID)
+  # Same two files, shifted to PORT_ADDR_BASE and marked hidden
+  # (scripts/android/gen_elf_syms.py). dram_syms.S is C-preprocessed first so
+  # the portaddr.h arena macros (with their C integer suffixes) expand.
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/port/src")
+  set(SRC_ROMASSETS "${CMAKE_BINARY_DIR}/port/src/romassets_${ASSET_REGION}_android.s")
+  set(SRC_DRAM_SYMS_EXPANDED "${CMAKE_BINARY_DIR}/port/src/dram_syms_expanded.s")
+  set(SRC_DRAM_SYMS "${CMAKE_BINARY_DIR}/port/src/dram_syms_android.s")
+  add_custom_command(
+    OUTPUT "${SRC_ROMASSETS}"
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/scripts/android/gen_elf_syms.py"
+            --base "${PORT_ADDR_BASE}"
+            "${SRC_ROMASSETS_INPUT}" "${SRC_ROMASSETS}"
+    DEPENDS "${SRC_ROMASSETS_INPUT}"
+            "${CMAKE_SOURCE_DIR}/scripts/android/gen_elf_syms.py"
+    VERBATIM)
+  add_custom_command(
+    OUTPUT "${SRC_DRAM_SYMS_EXPANDED}"
+    COMMAND "${CMAKE_C_COMPILER}" "--target=${CMAKE_C_COMPILER_TARGET}" "-E" "-P"
+            "-x" "assembler-with-cpp"
+            "-DPORT_ADDR_BASE=${PORT_ADDR_BASE}"
+            "-I${CMAKE_SOURCE_DIR}/port/include"
+            "${SRC_DRAM_SYMS_INPUT}"
+            "-o" "${SRC_DRAM_SYMS_EXPANDED}"
+    DEPENDS "${SRC_DRAM_SYMS_INPUT}"
+            "${CMAKE_SOURCE_DIR}/port/include/portaddr.h"
+    VERBATIM)
+  add_custom_command(
+    OUTPUT "${SRC_DRAM_SYMS}"
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/scripts/android/gen_elf_syms.py"
+            "${SRC_DRAM_SYMS_EXPANDED}" "${SRC_DRAM_SYMS}"
+    DEPENDS "${SRC_DRAM_SYMS_EXPANDED}"
+            "${CMAKE_SOURCE_DIR}/scripts/android/gen_elf_syms.py"
+    VERBATIM)
+  set_source_files_properties(${SRC_ROMASSETS} ${SRC_DRAM_SYMS_EXPANDED} ${SRC_DRAM_SYMS}
+    PROPERTIES GENERATED TRUE)
 else()
   set(SRC_ROMASSETS "${SRC_ROMASSETS_INPUT}")
   set(SRC_DRAM_SYMS "${SRC_DRAM_SYMS_INPUT}")
@@ -684,6 +827,28 @@ endif()
 # VI mode table (DATA, not a driver): fr.c references osViModeTable ~15x.
 # This is the only libultra/io file we compile — the rest are hardware
 # drivers that get shimmed in port/src/libultra.c.
+# Android (clang/ELF): lv.c and spectrum.c declare `extern T A;` before
+# `#pragma weak A = B`, which clang turns into an ambiguous second
+# declaration. Compile copies where the pragma is a macro naming the same
+# storage (scripts/android/weak_pragmas_to_macros.py). The other weak
+# pragmas (sinf/cosf, objective_status.c) build as-is.
+if(ANDROID)
+  foreach(_INPUT "${CMAKE_SOURCE_DIR}/src/game/lv.c" "${CMAKE_SOURCE_DIR}/src/game/spectrum.c")
+    get_filename_component(_NAME "${_INPUT}" NAME)
+    set(_OUTPUT "${CMAKE_BINARY_DIR}/port/src/android_${_NAME}")
+    add_custom_command(
+      OUTPUT "${_OUTPUT}"
+      COMMAND "${Python3_EXECUTABLE}"
+              "${CMAKE_SOURCE_DIR}/scripts/android/weak_pragmas_to_macros.py"
+              "${_INPUT}" "${_OUTPUT}"
+      DEPENDS "${_INPUT}" "${CMAKE_SOURCE_DIR}/scripts/android/weak_pragmas_to_macros.py"
+      VERBATIM)
+    set_source_files_properties("${_OUTPUT}" PROPERTIES GENERATED TRUE)
+    list(REMOVE_ITEM SRC_GAME "${_INPUT}")
+    list(APPEND SRC_GAME "${_OUTPUT}")
+  endforeach()
+endif()
+
 set(SRC_LIBULTRARE_DATA
   src/libultrare/io/vitbl.c
 )
@@ -806,9 +971,50 @@ set(SRC
 # Target
 # ----------------------------------------------------------------------------
 set(BIN_NAME "ge007${BIN_REGION}.${TARGET_ARCH}")
-add_executable(ge007 ${SRC})
-target_link_libraries(ge007 ${LIBS})
-set_target_properties(ge007 PROPERTIES OUTPUT_NAME "${BIN_NAME}")
+if(ANDROID)
+  # SDLActivity loads "libmain.so" and calls SDL_main (main.c's main(),
+  # renamed by SDL_main.h). The JNI bridge for the touch overlay and the data
+  # path lives in port/android/.
+  file(GLOB SRC_ANDROID CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/port/android/*.c")
+  add_library(ge007 SHARED ${SRC} ${SRC_ANDROID})
+  target_link_libraries(ge007 ${LIBS})
+  set_target_properties(ge007 PROPERTIES OUTPUT_NAME "main"
+    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/port/android/libmain.map")
+  # libc++ (unlike libstdc++) reaches the C headers with a plain #include
+  # from <cmath>/<cstddef>/..., so the decomp's own <math.h>/<stdlib.h> and
+  # the port shims, all on -I, would shadow its wrappers. Put the standard
+  # C++ and C directories first, for C++ sources only (fast3d and the
+  # port's .cpp files never want the N64 libc headers).
+  if(ANDROID_ABI STREQUAL "x86_64")
+    set(_GE_NDK_TRIPLE "x86_64-linux-android")
+  else()
+    set(_GE_NDK_TRIPLE "aarch64-linux-android")
+  endif()
+  execute_process(
+    COMMAND "${CMAKE_CXX_COMPILER}" -print-resource-dir
+    OUTPUT_VARIABLE _GE_CLANG_RES OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  # Clang (like GCC) ignores a -I that duplicates a system directory, so
+  # C++ sources drop the system search list (-nostdinc) and get it back as
+  # ordinary -I entries ahead of the game's list: libc++'s wrappers win and
+  # their #include_next reaches bionic, never the decomp's headers. CMake
+  # would also drop directories it knows to be the compiler's implicit ones;
+  # empty that list so these stay on the command line.
+  set(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "")
+  target_compile_options(ge007 PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-nostdinc>)
+  target_include_directories(ge007 BEFORE PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${_PORT_NDK_INC}/c++/v1>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${_GE_CLANG_RES}/include>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${_PORT_NDK_INC}/${_GE_NDK_TRIPLE}>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_BINARY_DIR}/ndk-usr-include>")
+  # ...and <sysroot>/usr/include is filtered even with the list emptied
+  # (CMake always treats [sysroot]/usr/include as implicit): reach it
+  # through a link under another name.
+  file(CREATE_LINK "${_PORT_NDK_INC}" "${CMAKE_BINARY_DIR}/ndk-usr-include" SYMBOLIC)
+else()
+  add_executable(ge007 ${SRC})
+  target_link_libraries(ge007 ${LIBS})
+  set_target_properties(ge007 PROPERTIES OUTPUT_NAME "${BIN_NAME}")
+endif()
 if(WIN32)
   set_target_properties(ge007 PROPERTIES WIN32_EXECUTABLE TRUE)
   # Explorer/taskbar icon: the original crosshair mark (cmake/icon/ge007.rc,

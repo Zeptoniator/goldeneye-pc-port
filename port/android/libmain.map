@@ -1,0 +1,10 @@
+/* Android libmain.so exports: only what SDL's Java glue and the JNI bridge
+ * look up by name. Everything else is local, which also lets lld resolve the
+ * absolute ROM/DRAM symbols at link time (see CMakeLists.txt). */
+{
+  global:
+    SDL_main;
+    Java_*;
+  local:
+    *;
+};

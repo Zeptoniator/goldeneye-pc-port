@@ -124,7 +124,13 @@ void portAllUnlockedApply(void)
 #endif
 }
 
+#if defined(PLATFORM_ANDROID)
+/* Android: SDL_main (port/android/android_main.c) moves to the app's data
+ * directory and calls this. */
+int portMain(int argc, char **argv)
+#else
 int main(int argc, char **argv)
+#endif
 {
     sysSetArgs(argc, argv);
 

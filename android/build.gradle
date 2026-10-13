@@ -1,0 +1,6 @@
+plugins {
+    id 'com.android.application' version '9.4.1' apply false
+    // Embedded Python, used once: the PC port's own asset converters run on
+    // the device against the ROM the player picks (SetupActivity).
+    id 'com.chaquo.python' version '17.1.0' apply false
+}

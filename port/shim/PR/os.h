@@ -29,8 +29,8 @@
 #include "portaddr.h"
 
 #if defined(PORT)
-#    if defined(__APPLE__)
-/* Darwin exposes errno and sprintf as function-like macros. Suppress them
+#    if defined(__APPLE__) || defined(__ANDROID__)
+/* Darwin (and bionic) expose errno and sprintf as function-like macros. Suppress them
  * while parsing the N64 API's errno fields and sprintf declaration. */
 #        pragma push_macro("errno")
 #        pragma push_macro("sprintf")
@@ -38,7 +38,7 @@
 #        undef sprintf
 #    endif
 #    include "include/PR/os.h"
-#    if defined(__APPLE__)
+#    if defined(__APPLE__) || defined(__ANDROID__)
 #        pragma pop_macro("sprintf")
 #        pragma pop_macro("errno")
 #    endif

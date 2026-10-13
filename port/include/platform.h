@@ -23,6 +23,12 @@
   #endif
 #elif defined(__linux__)
   #define PLATFORM_LINUX 1
+  #if defined(__ANDROID__)
+    /* Android is PLATFORM_LINUX (bionic, /proc, mmap) plus this flag for the
+     * few things that differ: app storage paths, the shifted address window
+     * (portaddr.h), logcat. */
+    #define PLATFORM_ANDROID 1
+  #endif
 #else
   #error "Unsupported platform"
 #endif

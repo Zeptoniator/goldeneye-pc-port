@@ -62,7 +62,11 @@ void assert();
  * winsock has not already declared them, so TUs that include <windows.h>
  * before <ultra64.h> don't get a dllimport redeclaration warning. Defined in
  * port/src/pc_netorder.c (little-endian byte swap == CharArrayTo16/32). */
-#if !defined(__WINSOCK_H) && !defined(_WINSOCK2_H)
+#if defined(__ANDROID__)
+/* bionic declares (and macro-defines) ntohs/ntohl in <sys/endian.h> with
+ * uint16_t/uint32_t signatures; use those (same little-endian byte swap). */
+#include <sys/endian.h>
+#elif !defined(__WINSOCK_H) && !defined(_WINSOCK2_H)
 /* Match winsock's own signatures (u_short/u_long) so TUs that parse
  * <windows.h> later redeclare compatibly; on LLP64 u_long is 64-bit and the
  * high bits are unused for the 16/32-bit values game code passes. */

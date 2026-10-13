@@ -59,6 +59,9 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(PLATFORM_ANDROID)
+#include <sys/syscall.h>
+#endif
 #endif
 
 #define DRAM_V1_BASE   PORT_DRAM_V1_BASE /* s32-safe "virtual" view (portaddr.h) */
@@ -114,6 +117,9 @@ void *dramReserve(void)
     int fd = shm_open(shmName, O_RDWR | O_CREAT, 0600);
     if (fd >= 0)
         shm_unlink(shmName);
+#elif defined(PLATFORM_ANDROID)
+    /* bionic's memfd_create() wrapper needs API 30; the syscall is older. */
+    int fd = (int)syscall(__NR_memfd_create, "ge007_dram", 0);
 #else
     int fd = memfd_create("ge007_dram", 0);
 #endif

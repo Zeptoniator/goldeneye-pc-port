@@ -51,6 +51,11 @@
 #ifndef PORT_ADDR_BASE
 #if defined(__APPLE__) && defined(__aarch64__)
 #define PORT_ADDR_BASE 0x100000000000ULL
+#elif defined(__ANDROID__)
+/* 256 GiB: inside a 39-bit (512 GiB) arm64 user address space, far from the
+ * ART heap (low 4 GiB) and from the mmap area (top down). CMake passes the
+ * same value with -D; this default only serves a stray TU. */
+#define PORT_ADDR_BASE 0x4000000000ULL
 #else
 #define PORT_ADDR_BASE 0
 #endif

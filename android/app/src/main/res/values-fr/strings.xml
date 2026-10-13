@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setup_intro">Cette application ne contient aucune donnée du jeu. Choisissez votre propre ROM de GoldenEye 007 (USA, .z64, .v64 ou .n64) : elle est vérifiée, copiée dans l\'application puis convertie une seule fois sur l\'appareil (quelques secondes).</string>
+    <string name="setup_pick">Choisir la ROM…</string>
+    <string name="setup_checking">Vérification de la ROM…</string>
+    <string name="setup_preparing">Préparation des données du jeu…</string>
+    <string name="setup_step_models">Conversion des modèles…</string>
+    <string name="setup_step_stages">Conversion des niveaux…</string>
+    <string name="setup_step_setups">Conversion des placements…</string>
+    <string name="setup_read_failed">Impossible de lire le fichier.</string>
+    <string name="setup_not_rom">Ce fichier n\'est pas une ROM N64.</string>
+    <string name="setup_wrong_rom">Ce n\'est pas la ROM prise en charge : cette version demande GoldenEye 007 (USA). Son SHA-1 est contrôlé pour qu\'un dump abîmé ou différent ne fasse pas planter le jeu plus tard.</string>
+    <string name="setup_write_failed">Impossible d\'enregistrer la ROM dans le stockage de l\'application.</string>
+    <string name="setup_convert_failed">La conversion a échoué. Détails ci-dessous.</string>
+</resources>

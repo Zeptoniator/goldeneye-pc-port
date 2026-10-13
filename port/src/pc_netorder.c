@@ -18,6 +18,8 @@
 
 #include <PR/ultratypes.h>
 
+#if !defined(__ANDROID__) /* bionic provides both, with the same semantics */
+
 /* Signatures match winsock's (u_short/u_long) so TUs that also parse
  * <winsock.h> see one consistent declaration; game code only ever passes
  * 16/32-bit values, for which the byte swap below is exact. */
@@ -30,3 +32,5 @@ unsigned long ntohl(unsigned long v)
 {
     return __builtin_bswap32((unsigned int)v);
 }
+
+#endif /* !__ANDROID__ */

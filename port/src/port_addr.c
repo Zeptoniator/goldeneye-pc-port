@@ -32,6 +32,10 @@
 #if defined(PLATFORM_MACOS) && defined(PLATFORM_ARM)
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
+#elif defined(PLATFORM_ANDROID)
+#include <errno.h>
+#include <string.h>
+#include <sys/mman.h>
 #endif
 
 uintptr_t g_portImageBase = 0;
@@ -174,7 +178,26 @@ void portAddrInit(void)
      * and macOS (0x1_00xxxxxx + slide). */
     g_portUseImageRel = (g_portImageBase >= (uintptr_t)PORT_ADDR_WINDOW) ? 1 : 0;
 
-#if PORT_ADDR_BASE != 0
+#if PORT_ADDR_BASE != 0 && defined(PLATFORM_ANDROID)
+    {
+        /* Android: reserve the 4 GiB window PROT_NONE (no memory committed),
+         * refusing to land on anything already mapped; the fixed carves in
+         * dram.c / romdata.c / libultra.c then MAP_FIXED inside it. */
+        void *want = (void *)(uintptr_t)PORT_ADDR_BASE;
+        void *got = mmap(want, (size_t)PORT_ADDR_WINDOW, PROT_NONE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE,
+                         -1, 0);
+        if (got != want) {
+            int err = errno;
+            if (got != MAP_FAILED) {
+                munmap(got, (size_t)PORT_ADDR_WINDOW);
+            }
+            sysFatalError("portAddr: cannot reserve the 4 GiB N64 window at "
+                          "0x%llx (%s). See docs/android.md.",
+                          (unsigned long long)PORT_ADDR_BASE, strerror(err));
+        }
+    }
+#elif PORT_ADDR_BASE != 0
     {
         /* Non-clobbering: VM_FLAGS_FIXED without VM_FLAGS_OVERWRITE fails with
          * KERN_NO_SPACE if the range is already in use, rather than silently

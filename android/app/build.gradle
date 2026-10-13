@@ -1,0 +1,122 @@
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+}
+
+// The SDL2 2.x source tree: its Java glue (SDLActivity & co.) is compiled
+// into the app and its C side is built by the top-level CMakeLists.txt.
+// -Pge.sdl2Dir=..., GE_SDL2_SOURCE_DIR, ge.sdl2Dir in local.properties, or
+// scripts/android/fetch-sdl2.sh's
+// default location (android/third_party/SDL2, git-ignored).
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def sdl2Dir = providers.gradleProperty('ge.sdl2Dir')
+        .orElse(providers.environmentVariable('GE_SDL2_SOURCE_DIR'))
+        .getOrElse(localProps.getProperty('ge.sdl2Dir', "${rootProject.projectDir}/third_party/SDL2"))
+// Region the native library is built for (the ROM pushed to the device must
+// match): ntsc-final (US, the default), pal-final, jpn-final.
+def romId = providers.gradleProperty('ge.romId').getOrElse('ntsc-final')
+
+android {
+    namespace 'io.github.zeptoniator.ge007'
+    compileSdk 37
+    ndkVersion '28.2.13676358'
+
+    defaultConfig {
+        applicationId 'io.github.zeptoniator.ge007'
+        minSdk 26
+        targetSdk 37
+        versionCode 1
+        versionName '0.6.0-android.1'
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DGE_SDL2_SOURCE_DIR=${sdl2Dir}",
+                          "-DROMID=${romId}",
+                          '-DANDROID_STL=c++_static'
+                targets 'ge007', 'SDL2'
+            }
+        }
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        debug {
+            // The game is unplayable at -O0 (software RSP); keep the native
+            // side optimised in debug APKs too.
+            externalNativeBuild { cmake { arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo' } }
+        }
+        release {
+            minifyEnabled false
+            externalNativeBuild { cmake { arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo' } }
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java', "${sdl2Dir}/android-project/app/src/main/java"]
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('../../CMakeLists.txt')
+            version '3.31.6'
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+// --------------------------------------------------------------------------
+// First-run asset preparation (SetupActivity -> src/main/python/ge007_convert.py)
+//
+// The converters (tools_pc/d43_emit.py, d69_emit.py, d88_emit.py +
+// d88_propdefs.py) are compiled into the APK unchanged. Besides the ROM they
+// read a few committed repo files -- the ROM file lists, the file resource
+// table and every model file header -- zipped here into an APK asset.
+// Nothing ROM-derived goes into the APK.
+def repoRoot = rootProject.file('..')
+
+chaquopy {
+    defaultConfig {
+        version '3.13'
+    }
+    sourceSets {
+        getByName('main') {
+            srcDir("${repoRoot}/tools_pc")
+            include 'ge007_convert.py', 'd43_emit.py', 'd69_emit.py', 'd88_emit.py', 'd88_propdefs.py'
+        }
+    }
+}
+
+def convertInputs = tasks.register('ge007ConvertInputs', Zip) {
+    archiveFileName = 'ge007-convert-inputs.zip'
+    destinationDirectory = layout.buildDirectory.dir('generated/ge007/assets')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(repoRoot) {
+        include 'scripts/filelist.*.csv'
+        include 'assets/obseg/file_resource_table.inc.c'
+    }
+    from("${repoRoot}/assets") {
+        into 'assets'
+        include { e -> e.directory || e.name.toLowerCase().endsWith('modelfileheader.inc.c') }
+        includeEmptyDirs = false
+    }
+}
+android.sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/ge007/assets').get().asFile)
+tasks.named('preBuild') { dependsOn convertInputs }

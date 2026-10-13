@@ -90,6 +90,9 @@
 #include "language.h"  /* j_text_trigger (control-type mirror) */
 #include "gun.h"  /* native weapon flags + dedicated reload entry points */
 #include "bondinv.h" /* inventory list for the Xbox-style gadget cycle */
+#if defined(PLATFORM_ANDROID)
+#include "../android/android_touch.h" /* on-screen controls: virtual pad + look drag */
+#endif
 
 /* D194 spazz diagnosis: game ticks batched into the current poll (lv.h).
  * Read-only; declared locally to avoid pulling lv.h's wider dependency set. */
@@ -837,7 +840,9 @@ void inputApplyMouseRequests(void)
 /* D594: on macOS the FOCUS_GAINED-driven click-to-lock is unreliable (AppKit
  * key-window; no focus events over ssh), so start armed like PD's MLOCK_ON --
  * the mouse is locked by default in-stage (see reconcileGrab()). */
-#ifdef PLATFORM_MACOS
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_ANDROID)
+/* Android: no cursor to click-lock; the look drag of the touch overlay (or a
+ * real mouse) is a locked mouse whenever a stage runs, like macOS. */
 static int captureArmed     = 1;   /* D594: PD MLOCK_ON default (see reconcileGrab) */
 #else
 static int captureArmed     = 0;   /* user has clicked to lock (capture mode) */
@@ -1642,6 +1647,10 @@ int inputInit(void)
                          SDL_GetError());
         }
     }
+#if defined(PLATFORM_ANDROID)
+    /* Before inputOpenPads(), so the on-screen pad gets a seat like any pad. */
+    androidTouchAttach();
+#endif
 
     /* D401: make BT PS4/PS5 pads report haptics (PD input.c:696-697). Must
      * be set before the pads below are opened. */
@@ -1739,6 +1748,9 @@ void inputRequestRescan(void)
 
 void inputUpdate(void)
 {
+#if defined(PLATFORM_ANDROID)
+    androidTouchUpdate();   /* attach/detach the on-screen pad (real pad in/out) */
+#endif
     if (SDL_AtomicSet(&s_rescanReq, 0)) inputRescanPads();   /* D450 */
     SDL_GameControllerUpdate();
     if (s_seatCompactOwed && !inputMpSplit()) {
@@ -1748,6 +1760,12 @@ void inputUpdate(void)
     /* D287: skip until the host thread has actually enabled relative mode
      * (a benign racy read of a host-thread int), so the few ms between the
      * logical grab and its application do not read absolute cursor motion. */
+#if defined(PLATFORM_ANDROID)
+    /* The overlay's look drag, always drained so that a drag made in a menu
+     * does not land as a jump once the stage grabs the mouse. */
+    double touchDX = 0.0, touchDY = 0.0;
+    androidTouchTakeLook(&touchDX, &touchDY);
+#endif
     if (!mouseEnabled || !mouseGrabbed || s_appRelative != 1) {
         return;
     }
@@ -1759,6 +1777,10 @@ void inputUpdate(void)
      * in case inputUpdate() is polled more than once between pad reads. */
     mouseDX += dx;
     mouseDY += dy;
+#if defined(PLATFORM_ANDROID)
+    mouseDX += touchDX;
+    mouseDY += touchDY;
+#endif
 }
 
 static int scaleAxis(int v, int dz)
@@ -3129,7 +3151,7 @@ static void applyGrab(int want)
  * per controller-0 poll (menuMode known there) and from the notify hooks. */
 static void reconcileGrab(int menuMode)
 {
-#ifdef PLATFORM_MACOS
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_ANDROID)
     /* D594: the FOCUS_GAINED-driven `windowFocused` gate is unreliable on
      * macOS (AppKit key-window; no focus events over ssh), so a click-to-lock
      * that waits on it never arms and the mouse button + look stay dead. PD
