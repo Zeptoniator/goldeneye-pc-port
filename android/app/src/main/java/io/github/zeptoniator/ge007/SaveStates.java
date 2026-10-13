@@ -11,14 +11,17 @@ import java.util.Date;
  * Savestates (port/src/savestate.c through port/android/android_savestate.c):
  * the files live in data/states/ next to the Bond file saves.
  *
- * Slot 0 is the automatic one, written when the app leaves the screen during
- * a mission and offered back at the next launch; slots 1-3 are the
- * player's.
+ * Slot 0 is the automatic one, written every 45 s of a mission and when the
+ * app leaves the screen, and offered back at the next launch; slots 1-3 are
+ * the player's.
  */
 final class SaveStates {
     static final int AUTO = 0, SLOTS = 4;
 
     static native void nativeSave(String path);
+    static native void nativeSaveLong(String path);
+    /** Periodic automatic save to path during missions (0 s = off). */
+    static native void nativeSetAuto(String path, int periodS);
     static native void nativeLoad(String path);
     static native boolean nativeBusy();
     static native boolean nativeCanSave();
@@ -39,7 +42,11 @@ final class SaveStates {
 
     /** Request a save and wait (at most timeoutMs) until it is on disk. */
     static boolean saveAndWait(Activity a, int slot, long timeoutMs) {
-        nativeSave(file(a, slot).getPath());
+        if (slot == AUTO) {
+            nativeSaveLong(file(a, slot).getPath());
+        } else {
+            nativeSave(file(a, slot).getPath());
+        }
         long end = SystemClock.uptimeMillis() + timeoutMs;
         while (nativeBusy() && SystemClock.uptimeMillis() < end) {
             SystemClock.sleep(10);

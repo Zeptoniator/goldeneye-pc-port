@@ -15,6 +15,9 @@ import android.view.ViewGroup;
 import android.window.OnBackInvokedDispatcher;
 import android.view.WindowManager;
 
+import android.util.Log;
+
+import org.libsdl.app.SDL;
 import org.libsdl.app.SDLActivity;
 
 /**
@@ -68,6 +71,8 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
                 }
             });
             GameOptions.applySaved(this);
+            // A recent automatic state even if the app is killed without warning.
+            SaveStates.nativeSetAuto(SaveStates.file(this, SaveStates.AUTO).getPath(), 45);
             offerResume();
             inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
             inputManager.registerInputDeviceListener(this, new Handler(Looper.getMainLooper()));
@@ -114,7 +119,7 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
         // background app at any time). Done before SDL pauses the game.
         if (overlay != null) {
             if (SaveStates.nativeCanSave()) {
-                SaveStates.saveAndWait(this, SaveStates.AUTO, 1500);
+                SaveStates.saveAndWait(this, SaveStates.AUTO, 2500);
             } else if (!SaveStates.nativeBusy()) {
                 // Not in a mission (front end): nothing to resume later.
                 //noinspection ResultOfMethodCallIgnored
@@ -151,6 +156,28 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
     @Override
     protected String[] getLibraries() {
         return new String[] { "SDL2", "main" };
+    }
+
+    /** port/android/loader/ge_fixedload.c: libmain.so's base, 0 on failure. */
+    private static native long nativeLoadMainFixed();
+
+    /**
+     * libmain.so at the same address in every process, so that savestates
+     * from an earlier run load without shifting pointers. SDL's own
+     * loadLibrary("main") then finds it loaded and registers it with ART.
+     */
+    @Override
+    public void loadLibraries() {
+        SDL.loadLibrary("SDL2", this);
+        try {
+            System.loadLibrary("geload");
+            if (nativeLoadMainFixed() == 0) {
+                Log.w("ge007", "libmain.so: normal load (savestates from other runs are relocated)");
+            }
+        } catch (UnsatisfiedLinkError e) {
+            Log.w("ge007", "libgeload.so: " + e.getMessage());
+        }
+        SDL.loadLibrary("main", this);
     }
 
     @Override

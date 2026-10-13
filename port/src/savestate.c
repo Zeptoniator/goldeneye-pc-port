@@ -40,6 +40,8 @@
 #include <time.h>
 #include <SDL.h>        /* before the N64 headers, as in input.c */
 
+#include <elf.h>
+
 #include <ultra64.h>
 #include "realzlib.h"   /* host zlib by absolute path (CMake-generated) */
 
@@ -122,6 +124,39 @@ static void regions(Region r[3])
 static uintptr_t imageStart(void) { return (uintptr_t)__ehdr_start; }
 static uintptr_t imageSize(void) { return (uintptr_t)_end - (uintptr_t)__ehdr_start; }
 
+/* The image's GNU build-id note (lld and GNU ld both emit one here): any
+ * change to the code changes it. A layout-only fingerprint let a state from
+ * a build with different code load, and its relocated function pointers then
+ * landed in the wrong functions. Returns the id length, 0 if none. */
+static int buildId(const unsigned char **id)
+{
+    const Elf64_Ehdr *eh = (const Elf64_Ehdr *)(const void *)__ehdr_start;
+    const Elf64_Phdr *ph = (const Elf64_Phdr *)(const void *)((const unsigned char *)eh + eh->e_phoff);
+    uintptr_t bias = 0;
+    for (int i = 0; i < eh->e_phnum; i++) {
+        if (ph[i].p_type == PT_LOAD && ph[i].p_offset == 0) {
+            bias = (uintptr_t)__ehdr_start - (uintptr_t)ph[i].p_vaddr;
+            break;
+        }
+    }
+    for (int i = 0; i < eh->e_phnum; i++) {
+        if (ph[i].p_type != PT_NOTE) continue;
+        const unsigned char *n = (const unsigned char *)(bias + (uintptr_t)ph[i].p_vaddr);
+        const unsigned char *end = n + ph[i].p_memsz;
+        while (n + sizeof(Elf64_Nhdr) <= end) {
+            const Elf64_Nhdr *nh = (const Elf64_Nhdr *)(const void *)n;
+            const unsigned char *name = n + sizeof(*nh);
+            const unsigned char *desc = name + ((nh->n_namesz + 3) & ~3u);
+            if (nh->n_type == NT_GNU_BUILD_ID && nh->n_namesz == 4 && memcmp(name, "GNU", 4) == 0) {
+                *id = desc;
+                return (int)nh->n_descsz;
+            }
+            n = desc + ((nh->n_descsz + 3) & ~3u);
+        }
+    }
+    return 0;
+}
+
 static uint64_t fingerprint(void)
 {
     Region r[3];
@@ -141,6 +176,12 @@ static uint64_t fingerprint(void)
     }
     for (const char *s = GE007_VERSION_HASH; *s; s++) {
         h ^= (unsigned char)*s;
+        h *= 1099511628211ull;
+    }
+    const unsigned char *id = NULL;
+    int idLen = buildId(&id);
+    for (int i = 0; i < idLen; i++) {
+        h ^= id[i];
         h *= 1099511628211ull;
     }
     return h;
@@ -194,8 +235,9 @@ static void keepRestore(KeepList *k)
 /* ------------------------------------------------------------- status */
 
 static SDL_SpinLock s_lock;
-static char s_savePath[512], s_loadPath[512];
-static int s_saveReq, s_loadReq;
+static char s_savePath[512], s_loadPath[512], s_autoPath[512];
+static int s_saveReq, s_loadReq, s_saveFreezeMs = SS_FREEZE_MS;
+static int s_autoPeriodS;              /* 0: no periodic automatic save */
 static SDL_atomic_t s_busy;            /* capture pending or writer running */
 static SDL_atomic_t s_lastResult;      /* 1 saved, 2 loaded, <0 error code */
 static char s_lastMessage[160];
@@ -312,7 +354,7 @@ static void diagnoseForeignPointers(const unsigned char *payload, size_t n)
     sysLogPrintf(found ? LOG_WARNING : LOG_INFO, "savestate: %d pointer(s) outside the window and image", found);
 }
 
-static void doSave(const char *path)
+static void doSave(const char *path, int freezeMs)
 {
     Region r[3];
     regions(r);
@@ -326,7 +368,7 @@ static void doSave(const char *path)
         SDL_AtomicSet(&s_busy, 0);
         return;
     }
-    if (!portFreezeGameThreads(SS_FREEZE_MS)) {
+    if (!portFreezeGameThreads(freezeMs)) {
         free(payload);
         free(job);
         setResult(-4, "the game did not pause in time; try again");
@@ -424,6 +466,10 @@ static void restoreMemory(const SsHeader *hdr, const unsigned char *payload)
     regions(r);
     keep.count = 0;
     portForEachKernelObject(keepAdd, &keep);
+    for (int i = 0; i < keep.count; i++) {
+        sysLogPrintf(LOG_NOTE, "savestate: keep %p (%zu bytes)%s", keep.p[i], keep.n[i],
+                     (const unsigned char *)keep.p[i] >= r[2].p ? " [arena]" : "");
+    }
 
     size_t off = 0;
     for (int i = 0; i < 3; i++) {
@@ -436,13 +482,27 @@ static void restoreMemory(const SsHeader *hdr, const unsigned char *payload)
     const int64_t delta = (int64_t)imageStart() - (int64_t)hdr->imageBase;
     int moved = 0;
     if (delta != 0) {
+        /* Heuristic: data that looks like an image pointer moves too (the
+         * ALEvent padding case, port/android/loader/ge_fixedload.c). Android
+         * avoids it by loading libmain.so at a fixed address. */
+        sysLogPrintf(LOG_WARNING, "savestate: the image moved since the save, shifting pointers");
+        /* Step 4 bytes, not 8: setup records in the arena are packed at
+         * 4-byte boundaries, so a pointer field that is 8-aligned within its
+         * struct can sit at addr % 8 == 4 (seen: ObjectRecord.embedment).
+         * After a hit, skip the pointer's 8 bytes. */
         for (int i = 0; i < 3; i++) {
-            uint64_t *w = (uint64_t *)(void *)r[i].p;   /* regions are 8-aligned */
-            size_t nw = r[i].n / 8;
-            for (size_t j = 0; j < nw; j++) {
-                if (w[j] >= oldLo && w[j] < oldHi) {
-                    w[j] = (uint64_t)((int64_t)w[j] + delta);
+            unsigned char *p = r[i].p;
+            size_t n = r[i].n;
+            for (size_t off = 0; off + 8 <= n; ) {
+                uint64_t v;
+                memcpy(&v, p + off, 8);
+                if (v >= oldLo && v < oldHi) {
+                    v = (uint64_t)((int64_t)v + delta);
+                    memcpy(p + off, &v, 8);
                     moved++;
+                    off += 8;
+                } else {
+                    off += 4;
                 }
             }
         }
@@ -500,13 +560,26 @@ static void loadStep2(void)
 
 /* --------------------------------------------------------------- API */
 
-void savestateRequestSave(const char *path)
+/* freezeMs: how long the game may stay frozen waiting for its threads to
+ * reach their loop tops (a few ms normally; longer while Android takes the
+ * app off screen, when the audio thread can be held up). */
+void savestateRequestSave(const char *path, int freezeMs)
 {
     SDL_AtomicLock(&s_lock);
     snprintf(s_savePath, sizeof(s_savePath), "%s", path);
     s_saveReq = 1;
+    s_saveFreezeMs = freezeMs > 0 ? freezeMs : SS_FREEZE_MS;
     SDL_AtomicUnlock(&s_lock);
     SDL_AtomicSet(&s_busy, 1);
+}
+
+/* Periodic automatic save during solo missions (0 s turns it off). */
+void savestateSetAuto(const char *path, int periodS)
+{
+    SDL_AtomicLock(&s_lock);
+    snprintf(s_autoPath, sizeof(s_autoPath), "%s", path ? path : "");
+    s_autoPeriodS = periodS;
+    SDL_AtomicUnlock(&s_lock);
 }
 
 void savestateRequestLoad(const char *path)
@@ -559,7 +632,7 @@ static void testHooks(void)
         const char *t = sysArgGetString("--ss-save-tick");
         if (tick >= (t ? atoi(t) : 900) && canSaveNow() && s_loadStep == LOAD_IDLE && !savestateBusy()) {
             saveArmed = 2;
-            savestateRequestSave(sysArgGetString("--ss-save"));
+            savestateRequestSave(sysArgGetString("--ss-save"), SS_FREEZE_MS);
         }
     }
     if (!loadDone && sysArgGetString("--ss-load")) {
@@ -595,6 +668,12 @@ void savestateGameTick(void)
         return;
     }
 
+    /* Periodic automatic save: a short freeze, skipped (and retried a few
+     * seconds later) rather than stalling the game when a thread is busy. */
+    static uint64_t nextAutoUs = 0;
+    int autoSave = 0, freezeMs = SS_FREEZE_MS;
+    uint64_t nowUs = sysGetMicroseconds();
+
     SDL_AtomicLock(&s_lock);
     if (s_loadReq) {
         load = 1;
@@ -603,9 +682,27 @@ void savestateGameTick(void)
     } else if (s_saveReq) {
         save = 1;
         s_saveReq = 0;
+        freezeMs = s_saveFreezeMs;
         snprintf(path, sizeof(path), "%s", s_savePath);
+    } else if (s_autoPeriodS > 0 && s_autoPath[0] && canSaveNow() && !savestateBusy()) {
+        if (nextAutoUs == 0) {
+            nextAutoUs = nowUs + (uint64_t)s_autoPeriodS * 1000000u;
+        } else if (nowUs >= nextAutoUs) {
+            autoSave = 1;
+            freezeMs = 60;
+            snprintf(path, sizeof(path), "%s", s_autoPath);
+        }
     }
     SDL_AtomicUnlock(&s_lock);
+
+    if (autoSave) {
+        SDL_AtomicSet(&s_busy, 1);
+        doSave(path, freezeMs);
+        /* Saved: next one a full period later; frozen too long: retry soon. */
+        nextAutoUs = nowUs + (SDL_AtomicGet(&s_lastResult) == -4 ? 5000000u
+                                                                 : (uint64_t)s_autoPeriodS * 1000000u);
+        return;
+    }
 
     if (load) {
         loadBegin(path);
@@ -615,6 +712,6 @@ void savestateGameTick(void)
             SDL_AtomicSet(&s_busy, 0);
             return;
         }
-        doSave(path);
+        doSave(path, freezeMs);
     }
 }

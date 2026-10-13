@@ -91,6 +91,17 @@ endif()
 # (port/src/romassets_<region>.s, see scripts/gen_romassets.py).
 project(ge007 C CXX ASM)
 
+# GE_HIGHIMAGE (Linux, test flavour): Android's address model on a desktop --
+# the N64 window at PORT_ADDR_BASE = 256 GiB and the game as a PIE loaded at
+# a random address far above 4 GiB (image-relative encoding, relocated
+# savestates). Reproduces Android-only address bugs with a debugger.
+option(GE_HIGHIMAGE "Linux test flavour: Android's address model (window at 256 GiB, PIE)" OFF)
+if(ANDROID OR GE_HIGHIMAGE)
+  set(GE_HIGH_WINDOW ON)
+else()
+  set(GE_HIGH_WINDOW OFF)
+endif()
+
 # Android: SDL2 is built from source next to the game (SDLActivity, the Java
 # side, loads libSDL2.so then libmain.so). Added here, before any of the
 # directory-wide flags, include paths and shims below, which are for the game
@@ -105,6 +116,8 @@ if(ANDROID)
   set(SDL_STATIC OFF CACHE BOOL "" FORCE)
   set(SDL_TEST OFF CACHE BOOL "" FORCE)
   add_subdirectory("${GE_SDL2_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/SDL2" EXCLUDE_FROM_ALL)
+  # libgeload.so: loads libmain.so at a fixed address (savestates).
+  add_subdirectory("${CMAKE_SOURCE_DIR}/port/android/loader" "${CMAKE_BINARY_DIR}/geload")
 endif()
 
 # Debug gate: validate every u32 -> host-pointer conversion against the regions
@@ -169,7 +182,7 @@ message(STATUS "Target arch: ${TARGET_ARCH} (64bit=${TARGET_IS_64BIT})")
 # cart pairing (romdata.c CART_HOST vs romassets_*.s values) agrees.
 if(APPLE AND TARGET_ARCH MATCHES "^aarch64$")
   set(PORT_ADDR_BASE 0x100000000000 CACHE STRING "Host base of the N64 address window (arm64 macOS)")
-elseif(ANDROID)
+elseif(GE_HIGH_WINDOW)
   # Android: the game is a shared library (libmain.so) loaded at a random
   # address by an app process whose low 4 GiB already hold the ART heap and
   # boot image (around 0x12c00000 and 0x70000000), so the N64 window cannot
@@ -492,6 +505,11 @@ elseif(ANDROID)
   # lld resolves the absolute symbols at link time: bionic would otherwise
   # add the load bias to a preemptible SHN_ABS symbol.
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_SOURCE_DIR}/port/android/libmain.map -Wl,-z,max-page-size=16384")
+elseif(GE_HIGHIMAGE)
+  # Same model as Android in an executable: PIC code (extern data through the
+  # GOT, where the hidden absolute symbols resolve to constants) and a PIE.
+  add_compile_options(-fPIC)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pie")
 elseif(UNIX AND NOT APPLE)
   # Linux equivalent of the ASLR-off requirement above: dram_syms.s defines
   # absolute symbols at 0x70000000 referenced through pointer-typed externs. A
@@ -718,12 +736,16 @@ if(APPLE)
     VERBATIM)
   set_source_files_properties(${SRC_ROMASSETS} ${SRC_DRAM_SYMS_EXPANDED} ${SRC_DRAM_SYMS}
     PROPERTIES GENERATED TRUE)
-elseif(ANDROID)
+elseif(GE_HIGH_WINDOW)
   # Same two files, shifted to PORT_ADDR_BASE and marked hidden
   # (scripts/android/gen_elf_syms.py). dram_syms.S is C-preprocessed first so
   # the portaddr.h arena macros (with their C integer suffixes) expand.
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/port/src")
+  set(_GE_PP_TARGET "")
+  if(CMAKE_C_COMPILER_TARGET)
+    set(_GE_PP_TARGET "--target=${CMAKE_C_COMPILER_TARGET}")
+  endif()
   set(SRC_ROMASSETS "${CMAKE_BINARY_DIR}/port/src/romassets_${ASSET_REGION}_android.s")
   set(SRC_DRAM_SYMS_EXPANDED "${CMAKE_BINARY_DIR}/port/src/dram_syms_expanded.s")
   set(SRC_DRAM_SYMS "${CMAKE_BINARY_DIR}/port/src/dram_syms_android.s")
@@ -738,7 +760,7 @@ elseif(ANDROID)
     VERBATIM)
   add_custom_command(
     OUTPUT "${SRC_DRAM_SYMS_EXPANDED}"
-    COMMAND "${CMAKE_C_COMPILER}" "--target=${CMAKE_C_COMPILER_TARGET}" "-E" "-P"
+    COMMAND "${CMAKE_C_COMPILER}" ${_GE_PP_TARGET} "-E" "-P"
             "-x" "assembler-with-cpp"
             "-DPORT_ADDR_BASE=${PORT_ADDR_BASE}"
             "-I${CMAKE_SOURCE_DIR}/port/include"

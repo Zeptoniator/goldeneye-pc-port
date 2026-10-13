@@ -37,7 +37,7 @@ android {
                 arguments "-DGE_SDL2_SOURCE_DIR=${sdl2Dir}",
                           "-DROMID=${romId}",
                           '-DANDROID_STL=c++_static'
-                targets 'ge007', 'SDL2'
+                targets 'ge007', 'SDL2', 'geload'
             }
         }
         ndk {

@@ -31,7 +31,6 @@
     #include <mach-o/dyld.h> /* _dyld_get_image_header, _NSGetExecutablePath */
   #endif
   #if defined(PLATFORM_ANDROID)
-    #include <dlfcn.h> /* dladdr: libmain.so's load base */
     #include <android/log.h>
   #endif
 #endif
@@ -72,14 +71,12 @@ uintptr_t sysImageBase(void)
      * so this is 0x1_0000_0000 + a per-run ASLR slide. M1's image-relative
      * address rule uses this; get the slide from _dyld_get_image_vmaddr_slide. */
     return (uintptr_t)_dyld_get_image_header(0);
-#elif defined(PLATFORM_ANDROID)
-    /* The game is libmain.so, loaded at a random address (far above 4 GiB on
-     * arm64): its load base drives the image-relative encoding. */
-    Dl_info info;
-    if (dladdr((void *)&sysImageBase, &info) && info.dli_fbase) {
-        return (uintptr_t)info.dli_fbase;
-    }
-    return 0;
+#elif defined(PLATFORM_LINUX) && defined(__PIC__)
+    /* Android's libmain.so (or the Linux GE_HIGHIMAGE PIE), loaded at a
+     * random address far above 4 GiB: its load base drives the
+     * image-relative encoding. */
+    extern char __ehdr_start[];   /* the linker's: the image's first byte */
+    return (uintptr_t)__ehdr_start;
 #else
     /* TODO: parse /proc/self/maps for the first executable mapping. */
     return 0;

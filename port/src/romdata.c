@@ -428,7 +428,7 @@ int romdataInit(void)
              * catches a relocated result. On macOS portAddrInit has already
              * reserved the whole window, so MAP_FIXED lands inside our range. */
             int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-#if PORT_ADDR_BASE != 0 && defined(PLATFORM_ANDROID)
+#if PORT_ADDR_BASE != 0 && defined(PLATFORM_LINUX)
             /* portAddrInit reserved the whole window: land inside it. */
             flags |= MAP_FIXED;
 #elif !defined(PLATFORM_MACOS)

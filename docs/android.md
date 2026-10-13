@@ -8,7 +8,9 @@ port layer, same renderer (OpenGL ES 3.0 through fast3d's ES path).
 difficulty, briefing) into Dam with its intro cutscene, `-level_09`
 (Bunker 1) played by touch (move, look, use a door, fire), the watch on
 Back, background/resume, on-device asset conversion byte-identical to the
-PC converters. 120 Hz presents with frame interpolation (99-120/s on Dam);
+PC converters; savestates: save from the panel, Home then a killed app
+then "Resume" back into the mission, saves after a load, the periodic
+automatic save. 120 Hz presents with frame interpolation (99-120/s on Dam);
 about 60 % of one core in game, 1 % in the background. **Not verified yet:** a whole campaign, split-screen
 multiplayer, a real Bluetooth/USB controller (the overlay should hide
 itself), 16 KB-page devices, devices with a 48-bit address space only.
@@ -98,8 +100,8 @@ overlay and takes over (SDL hot-plug, untested so far).
 
 The disk button opens **Saves**: three slots plus an **automatic** one.
 Saving works during a solo mission, loading anywhere (front end included).
-Leaving the app during a mission writes the automatic slot; at the next
-launch the game offers to **resume** it (Android may close a background app
+The automatic slot is written every 45 s of a mission and when the app
+leaves the screen; at the next launch the game offers to **resume** it (Android may close a background app
 at any time, which used to restart the game from the intro). Files:
 `data/states/{auto,slot1..3}.ge7s` (~0.8 MB each). The Bond file saves
 (EEPROM) stay the reference: after a load they are re-read from disk, so an
@@ -113,24 +115,40 @@ old state never erases mission progress saved since.
   state, libaudio; not init.c/sched.c/joy.c/stacks.c, not the port). zlib,
   written by a background thread.
 - **When:** on the main game thread inside its `gfxFrameMsgQ` receive (where
-  the F10 watch edits already apply), with the other game threads frozen:
-  `portFreezeGameThreads()` (libultra.c) waits until each one is blocked on a
-  queue or parked at a checkpoint at the entry/exit of `osRecvMesg`/
-  `osSendMesg`, and the render worker has no frame.
+  the F10 watch edits already apply), with the other game threads frozen at
+  the top of their loops: `portFreezeGameThreads()` (libultra.c) waits until
+  each one is blocked on, or parked at, its *home* queue (the first queue it
+  ever blocked on: the audio thread between two audio frames, never with a
+  frame's completion pending), then lets the scheduler stop anywhere, and
+  the render worker has no frame. A periodic save allows 60 ms for this and
+  retries 5 s later; leaving the screen allows 1.2 s.
 - **Load, in two steps:** the saved stage is first loaded the normal way
   (`g_MainStageNum`, as the front end does) so the port's per-stage state
   matches it; at its first frame the saved memory replaces the fresh one.
   Every message queue, thread object and timer of the running process is kept
-  (`portForEachKernelObject`). Android loads `libmain.so` at a random address:
-  8-byte words that pointed into the saving process's image are moved by the
-  difference. Texture cache reset; interpolation treats it as a cut.
+  (`portForEachKernelObject`). Texture cache reset; interpolation treats it
+  as a cut.
+- **Same image address in every process.** The state holds native pointers
+  into the game's image (function pointers, the audio driver's lists).
+  `libgeload.so` (`port/android/loader/`, called from
+  `GoldenEyeActivity.loadLibraries()` before SDL's own load) reserves
+  `0x42_0000_0000` and loads `libmain.so` there with `android_dlopen_ext`
+  (`ANDROID_DLEXT_RESERVED_ADDRESS`); ART's `loadLibrary("main")` then finds
+  it loaded. If that ever fails, the load falls back to shifting every word
+  that looks like a pointer into the old image, a heuristic: it once rewrote
+  the padding after `ALEvent.type` (stale pointer bytes), the music sequence
+  player lost its self-perpetuating event and spun in `__CSPVoiceHandler`,
+  and no further save could freeze the audio thread.
 - **Limits:** solo only; a state loads only in the build that wrote it
-  (layout fingerprint).
+  (layout fingerprint plus the image's GNU build-id).
 - **Test hooks:** `--ss-save <file> [--ss-save-tick n]`,
   `--ss-load <file> [--ss-load-tick n]`. Verified headless on Linux: Bunker 1,
   scripted walk through the door and four shots, saved, then a new process
   from the title loads it: same place, 3 rounds left, same bullet holes, runs
-  on.
+  on. `-DGE_HIGHIMAGE=ON` (Linux, with `GE_SAVESTATE`) builds Android's
+  address model on the desktop: the window at 256 GiB and the game as a PIE
+  at a random address, for chasing Android-only address bugs under gdb
+  (`setarch -R` gives the same address every run).
 
 ## Game options
 

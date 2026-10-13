@@ -32,7 +32,7 @@
 #if defined(PLATFORM_MACOS) && defined(PLATFORM_ARM)
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
-#elif defined(PLATFORM_ANDROID)
+#elif defined(PLATFORM_LINUX)
 #include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -178,9 +178,10 @@ void portAddrInit(void)
      * and macOS (0x1_00xxxxxx + slide). */
     g_portUseImageRel = (g_portImageBase >= (uintptr_t)PORT_ADDR_WINDOW) ? 1 : 0;
 
-#if PORT_ADDR_BASE != 0 && defined(PLATFORM_ANDROID)
+#if PORT_ADDR_BASE != 0 && defined(PLATFORM_LINUX)
     {
-        /* Android: reserve the 4 GiB window PROT_NONE (no memory committed),
+        /* Android (and the Linux GE_HIGHIMAGE flavour): reserve the 4 GiB
+         * window PROT_NONE (no memory committed),
          * refusing to land on anything already mapped; the fixed carves in
          * dram.c / romdata.c / libultra.c then MAP_FIXED inside it. */
         void *want = (void *)(uintptr_t)PORT_ADDR_BASE;

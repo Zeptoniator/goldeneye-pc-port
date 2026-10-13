@@ -492,15 +492,39 @@ static void crashHandler(int sig, siginfo_t *siginfo, void *ctx)
         pc = (void *)ucontext->uc_mcontext->__ss.__rip;
 #elif defined(PLATFORM_MACOS) && defined(PLATFORM_ARM)
         pc = (void *)(uintptr_t)ucontext->uc_mcontext->__ss.__pc;
+#elif defined(PLATFORM_LINUX) && defined(PLATFORM_ARM)
+        pc = (void *)(uintptr_t)ucontext->uc_mcontext.pc;
 #endif
     }
 
     sysLogPrintf(LOG_ERROR, "FATAL: Crashed: PC=%p SIGNAL=%d", pc, sig);
+#if defined(PLATFORM_LINUX) && defined(PLATFORM_ARM)
+    /* arm64 Linux / Android: where, and who called (x30), as module+offset
+     * so a stripped device build can be read against the unstripped .so. */
+    if (ucontext) {
+        void *lr = (void *)(uintptr_t)ucontext->uc_mcontext.regs[30];
+        void *mpc = crashGetModuleBase(pc), *mlr = crashGetModuleBase(lr);
+        sysLogPrintf(LOG_ERROR, "FATAL: pc=%p (base %p +0x%lx) lr=%p (base %p +0x%lx) fault=%p sp=%p",
+                     pc, mpc, (unsigned long)((uintptr_t)pc - (uintptr_t)mpc),
+                     lr, mlr, (unsigned long)((uintptr_t)lr - (uintptr_t)mlr),
+                     (void *)(uintptr_t)ucontext->uc_mcontext.fault_address,
+                     (void *)(uintptr_t)ucontext->uc_mcontext.sp);
+    }
+#endif
 
     fflush(stderr);
     fflush(stdout);
 
     crashStackTrace(msg, sig, pc, ucontext, siginfo);
+#if defined(PLATFORM_ANDROID)
+    /* No console on Android: the trace goes to logcat too, line by line. */
+    for (char *line = msg, *nl; line && *line; line = nl ? nl + 1 : NULL) {
+        nl = strchr(line, '\n');
+        if (nl) *nl = 0;
+        sysLogPrintf(LOG_ERROR, "CRASH %s", line);
+        if (nl) *nl = '\n';
+    }
+#endif
 
     {
         FILE *f = fopen(CRASH_LOG_FNAME, "wb");

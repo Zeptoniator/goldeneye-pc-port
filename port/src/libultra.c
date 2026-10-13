@@ -28,6 +28,11 @@
 #include <stdint.h>
 #include <time.h>
 #include <math.h>   /* D583: floor/fabs in the present grid */
+#include <stdio.h>
+#if defined(__linux__)
+#include <unistd.h>
+#include <sys/syscall.h>   /* SYS_gettid: savestate freeze diagnostics */
+#endif
 
 #include <SDL.h>
 
@@ -180,6 +185,9 @@ typedef struct PortThread {
     int exited;         /* entry returned / stopped / parked (idle) */
     volatile int waiting;  /* savestate freeze: blocked in a queue wait */
     volatile int parked;   /* savestate freeze: parked at a checkpoint */
+    OSMesgQueue *volatile homeQ;    /* first queue it ever blocked on: its loop top */
+    int ktid;                       /* kernel thread id (diagnostics) */
+    OSMesgQueue *volatile waitingOn;
 } PortThread;
 
 static PortThread g_pt[PORT_MAX_THREADS];
@@ -196,15 +204,30 @@ static PortThread g_pt[PORT_MAX_THREADS];
 /* ------------------------------------------------------------------------ */
 static pthread_mutex_t s_frzLock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t s_frzCond = PTHREAD_COND_INITIALIZER;
-static int s_frz = 0;                       /* freeze requested (atomic reads) */
+static int s_frz = 0;                       /* 0 off, 1 park at home, 2 park anywhere */
 static pthread_t s_frzOwner;
 static __thread PortThread *t_portSelf = NULL; /* game threads only */
+static OSMesgQueue *g_viRetraceMQ;              /* defined further down */
 
-static void portFreezeCheckpoint(void)
+/* The scheduler is the thread whose home is the VI retrace queue. It keeps
+ * running in phase 1 (the others may be waiting on its task completions)
+ * and parks anywhere in phase 2. Every other thread parks only at its home
+ * queue -- the top of its loop -- so a state is always captured and restored
+ * with each thread between two of its iterations (the audio thread between
+ * two audio frames, never with a frame's completion pending). */
+static int portIsScheduler(const PortThread *pt)
+{
+    return pt->homeQ != NULL && pt->homeQ == g_viRetraceMQ;
+}
+
+static void portFreezeCheckpointAt(OSMesgQueue *mq)
 {
     PortThread *me = t_portSelf;
-    if (!me || !__atomic_load_n(&s_frz, __ATOMIC_ACQUIRE) ||
-        pthread_equal(pthread_self(), s_frzOwner)) {
+    int phase = __atomic_load_n(&s_frz, __ATOMIC_ACQUIRE);
+    if (!me || !phase || pthread_equal(pthread_self(), s_frzOwner)) {
+        return;
+    }
+    if (portIsScheduler(me) ? phase < 2 : (me->homeQ == NULL || mq != me->homeQ)) {
         return;
     }
     pthread_mutex_lock(&s_frzLock);
@@ -215,6 +238,11 @@ static void portFreezeCheckpoint(void)
     }
     me->parked = 0;
     pthread_mutex_unlock(&s_frzLock);
+}
+
+static void portFreezeCheckpoint(void)
+{
+    portFreezeCheckpointAt(NULL);   /* the scheduler only, in phase 2 */
 }
 
 /* Side table: OSMesgQueue* -> lock/cond. The game's OSMesgQueue struct has a
@@ -237,7 +265,7 @@ static uint64_t g_lastHeartbeatUs = 0;
 static int g_framesRendered = 0;
 
 /* Forward decls: the VI retrace registration lives further down. */
-static OSMesgQueue *g_viRetraceMQ = NULL;
+static OSMesgQueue *g_viRetraceMQ = NULL;   /* also forward-declared above */
 static OSMesg g_viRetraceMsg = 0;
 
 /* Vsync tick state: one VI retrace message per FRAME, at the console's
@@ -448,6 +476,9 @@ static void *portThreadWrapper(void *arg)
     pt->tid = (unsigned long)pthread_self();
 #endif
     t_portSelf = pt;
+#if defined(PLATFORM_LINUX)
+    pt->ktid = (int)syscall(SYS_gettid);
+#endif
 
     /* The N64 idle thread is an infinite no-yield loop (idleproc). On the
      * host it would just burn a core and nothing depends on it running, so
@@ -658,11 +689,22 @@ int portFreezeGameThreads(int timeoutMs)
     s_frzOwner = pthread_self();
     __atomic_store_n(&s_frz, 1, __ATOMIC_RELEASE);
     for (;;) {
+        int phase = __atomic_load_n(&s_frz, __ATOMIC_ACQUIRE);
         int busy = 0;
         for (int i = 0; i < PORT_MAX_THREADS; ++i) {
             PortThread *pt = &g_pt[i];
             if (!pt->os || !pt->started || pt->exited || pt == t_portSelf) continue;
-            if (!pt->waiting && !pt->parked) { busy = 1; break; }
+            if (portIsScheduler(pt)) {
+                /* Phase 2: parked, or blocked on any queue. */
+                if (phase == 2 && !pt->parked && !pt->waiting) busy = 1;
+                continue;
+            }
+            /* At home: parked there, or blocked waiting on it. */
+            if (!pt->parked && !(pt->waiting && pt->waitingOn == pt->homeQ)) busy = 1;
+        }
+        if (!busy && phase == 1) {
+            __atomic_store_n(&s_frz, 2, __ATOMIC_RELEASE);   /* now the scheduler */
+            continue;
         }
         if (!busy && portRenderWorkerIdle()) {
             pthread_mutex_unlock(&s_frzLock);
@@ -672,7 +714,28 @@ int portFreezeGameThreads(int timeoutMs)
             __atomic_store_n(&s_frz, 0, __ATOMIC_RELEASE);
             pthread_cond_broadcast(&s_frzCond);
             pthread_mutex_unlock(&s_frzLock);
-            sysLogPrintf(LOG_WARNING, "savestate: game threads did not settle in %d ms", timeoutMs);
+            sysLogPrintf(LOG_WARNING, "savestate: game threads did not settle in %d ms (phase %d)",
+                         timeoutMs, phase);
+            for (int i = 0; i < PORT_MAX_THREADS; ++i) {
+                PortThread *pt = &g_pt[i];
+                if (!pt->os || !pt->started || pt->exited || pt == t_portSelf) continue;
+                char wchan[64] = "?";
+#if defined(PLATFORM_LINUX)
+                {
+                    char path[64];
+                    snprintf(path, sizeof(path), "/proc/self/task/%d/wchan", pt->ktid);
+                    FILE *f = fopen(path, "r");
+                    if (f) {
+                        size_t n = fread(wchan, 1, sizeof(wchan) - 1, f);
+                        wchan[n] = 0;
+                        fclose(f);
+                    }
+                }
+#endif
+                sysLogPrintf(LOG_WARNING, "savestate:   thread id %d tid %d sched=%d parked=%d waiting=%d on=%p home=%p wchan=%s",
+                             (int)pt->id, pt->ktid, portIsScheduler(pt), pt->parked, pt->waiting,
+                             (void *)pt->waitingOn, (void *)pt->homeQ, wchan);
+            }
             return 0;
         }
         struct timespec ts;
@@ -762,7 +825,7 @@ s32 osSendMesg(OSMesgQueue *mq, OSMesg msg, s32 flag)
             pthread_mutex_unlock(&pq->lock);
             return -1;
         }
-        if (t_portSelf) t_portSelf->waiting = 1;
+        if (t_portSelf) { t_portSelf->waitingOn = NULL; t_portSelf->waiting = 1; }
         pthread_cond_wait(&pq->cond, &pq->lock);
         if (t_portSelf) t_portSelf->waiting = 0;
     }
@@ -777,7 +840,7 @@ extern OSMesgQueue gfxFrameMsgQ; /* src/init.c */
 
 s32 osRecvMesg(OSMesgQueue *mq, OSMesg *msg, s32 flag)
 {
-    portFreezeCheckpoint();
+    portFreezeCheckpointAt(mq);
     PortQueue *pq = portQueueGet(mq);
     pthread_mutex_lock(&pq->lock);
     while (mq->validCount == 0) {
@@ -831,7 +894,11 @@ s32 osRecvMesg(OSMesgQueue *mq, OSMesg *msg, s32 flag)
                          (void *)mq, ra,
                          (void *)((uintptr_t)ra - sysImageBase()));
         }
-        if (t_portSelf) t_portSelf->waiting = 1;
+        if (t_portSelf) {
+            if (!t_portSelf->homeQ) t_portSelf->homeQ = mq;   /* first block: its loop top */
+            t_portSelf->waitingOn = mq;
+            t_portSelf->waiting = 1;
+        }
         pthread_cond_wait(&pq->cond, &pq->lock);
         if (t_portSelf) t_portSelf->waiting = 0;
     }
@@ -857,7 +924,8 @@ s32 osRecvMesg(OSMesgQueue *mq, OSMesg *msg, s32 flag)
         savestateGameTick();
     }
 #endif
-    portFreezeCheckpoint();
+    /* Woken at home during a freeze: park before acting on the message. */
+    portFreezeCheckpointAt(mq);
     return 0;
 }
 

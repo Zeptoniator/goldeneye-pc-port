@@ -7,12 +7,18 @@
 
 #include "system.h"
 
-void savestateRequestSave(const char *path);
+void savestateRequestSave(const char *path, int freezeMs);
+void savestateSetAuto(const char *path, int periodS);
 void savestateRequestLoad(const char *path);
 int savestateBusy(void);
 int savestateCanSave(void);
 int savestateLastResult(char *msg, int msgLen);
 int savestatePeek(const char *path, int *stage, int *difficulty, long long *savedAt);
+
+static void requestSaveDefault(const char *path)
+{
+    savestateRequestSave(path, 400);
+}
 
 static void withPath(JNIEnv *env, jstring jpath, void (*fn)(const char *))
 {
@@ -27,7 +33,31 @@ JNIEXPORT void JNICALL
 Java_io_github_zeptoniator_ge007_SaveStates_nativeSave(JNIEnv *env, jclass cls, jstring path)
 {
     (void)cls;
-    withPath(env, path, savestateRequestSave);
+    withPath(env, path, requestSaveDefault);
+}
+
+/* Leaving the screen: the audio thread can be held up while Android takes
+ * the app away, so allow a longer freeze. */
+JNIEXPORT void JNICALL
+Java_io_github_zeptoniator_ge007_SaveStates_nativeSaveLong(JNIEnv *env, jclass cls, jstring jpath)
+{
+    (void)cls;
+    const char *p = (*env)->GetStringUTFChars(env, jpath, NULL);
+    if (p) {
+        savestateRequestSave(p, 1200);
+        (*env)->ReleaseStringUTFChars(env, jpath, p);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_io_github_zeptoniator_ge007_SaveStates_nativeSetAuto(JNIEnv *env, jclass cls, jstring jpath, jint periodS)
+{
+    (void)cls;
+    const char *p = (*env)->GetStringUTFChars(env, jpath, NULL);
+    if (p) {
+        savestateSetAuto(p, periodS);
+        (*env)->ReleaseStringUTFChars(env, jpath, p);
+    }
 }
 
 JNIEXPORT void JNICALL
