@@ -12,4 +12,17 @@
     <string name="setup_wrong_rom">Ce n\'est pas la ROM prise en charge : cette version demande GoldenEye 007 (USA). Son SHA-1 est contrôlé pour qu\'un dump abîmé ou différent ne fasse pas planter le jeu plus tard.</string>
     <string name="setup_write_failed">Impossible d\'enregistrer la ROM dans le stockage de l\'application.</string>
     <string name="setup_convert_failed">La conversion a échoué. Détails ci-dessous.</string>
+    <string name="touch_settings_title">Commandes tactiles</string>
+    <string name="touch_look">Sensibilité de la visée</string>
+    <string name="touch_look_y">Visée verticale (relative)</string>
+    <string name="touch_invert_y">Inverser la visée verticale</string>
+    <string name="touch_opacity">Opacité des boutons</string>
+    <string name="touch_size">Taille des boutons</string>
+    <string name="touch_haptics">Vibrer à l\'appui</string>
+    <string name="touch_defaults">Par défaut</string>
+    <string name="touch_move_buttons">Déplacer les boutons</string>
+    <string name="touch_close">Fermer</string>
+    <string name="touch_done">Terminé</string>
+    <string name="touch_default">Rétablir</string>
+    <string name="touch_edit_hint">Faites glisser les boutons à l\'endroit voulu</string>
 </resources>

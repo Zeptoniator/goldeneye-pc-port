@@ -2193,6 +2193,23 @@ static int inputCanUseGameplayActions(int menuMode)
            !lvlGetControlsLockedFlag() && !gameScriptedCameraActive();
 }
 
+#if defined(PLATFORM_ANDROID)
+/* On-screen controls (port/android/android_touch.c): which button set to
+ * show. 0 = front end, 1 = playing, 2 = in a stage but in the watch / pause
+ * (menu buttons). Polled from the UI thread: plain reads, a stale answer
+ * only shows the other set for one poll. */
+int inputTouchContext(void)
+{
+    if (current_menu != GE_MENU_RUN_STAGE && current_menu != GE_MENU_INVALID) {
+        return 0;
+    }
+    if (slotPlayer() && (!slotPlayer()->outside_watch_menu || slotPlayer()->pause_state)) {
+        return 2;
+    }
+    return 1;
+}
+#endif
+
 /* D394: the Xbox B gadget cycle has no N64 button equivalent (native A
  * deliberately skips IDs >= ITEM_BOMBCASE). Select the next owned,
  * equippable inventory gadget using the game's normal weapon-switch path;

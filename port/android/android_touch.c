@@ -22,6 +22,8 @@
 
 #include "android_touch.h"
 
+int inputTouchContext(void); /* port/src/input.c */
+
 #define TOUCH_NBUTTONS (SDL_CONTROLLER_BUTTON_DPAD_RIGHT + 1)
 
 static SDL_Joystick *s_joy;
@@ -148,4 +150,11 @@ Java_io_github_zeptoniator_ge007_TouchOverlay_nativeSetEnabled(JNIEnv *env, jcla
 {
     (void)env; (void)cls;
     SDL_AtomicSet(&s_wanted, on ? 1 : 0);
+}
+
+JNIEXPORT jint JNICALL
+Java_io_github_zeptoniator_ge007_TouchOverlay_nativeContext(JNIEnv *env, jclass cls)
+{
+    (void)env; (void)cls;
+    return s_joy ? inputTouchContext() : 0;
 }

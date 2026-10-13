@@ -64,19 +64,31 @@ adb logcat -s ge007   # every sysLogPrintf line is mirrored to logcat
 
 ## Controls
 
-| Touch | Pad equivalent (port layout) | In game |
+Two button sets, switched by what the game is doing (`inputTouchContext()`
+in `port/src/input.c`, polled by the overlay): **playing**, and **menus**
+(front end, watch, pause). Icons are vector-drawn; dark discs with light
+rings stay readable on snow and night levels.
+
+| Touch | Pad equivalent (port layout) | Shown |
 |---|---|---|
-| Left 42 % of the screen: floating stick | left stick | move / strafe (menus: navigate) |
-| Drag anywhere else | mouse | look (direct look; GEPD-style aim while aiming) |
-| FIRE (drag it to aim while firing) | right trigger | Z, fire |
-| AIM (toggle) | left trigger | R, aim mode |
-| USE | A | use / interact; accept in menus |
-| RELOAD | X | reload |
-| GUN | Y | next weapon; cancel in menus |
-| GADGET | B | cycle gadgets; cancel in menus |
-| CROUCH | left stick click | crouch toggle |
-| START, or the Back gesture | Start | watch / pause |
-| MENU | Back | PC options overlay |
+| Left 42 % of the screen: floating stick | left stick | always (move / strafe; navigate menus) |
+| Drag anywhere else | mouse | always (look: direct look; GEPD-style aim while aiming) |
+| FIRE (drag it to aim while firing) | right trigger | playing |
+| AIM (toggle, amber ring when on) | left trigger | playing |
+| USE | A | playing |
+| RELOAD | X | playing |
+| NEXT (gun) | Y | playing |
+| Watch icon (gadget) | B | playing |
+| Crouch (bottom-right corner) | left stick click | playing |
+| OK / BACK | A / B | menus |
+| Pause icon, or the Back gesture | Start | always (watch / pause) |
+| ≡ | Back | always (PC options overlay) |
+| Gear | — | always: touch settings |
+
+**Touch settings** (gear): look sensitivity, vertical look, invert vertical,
+button opacity and size, vibration on press, **move buttons** (drag any
+button of either set; Reset / Done), defaults. Stored in the app's
+`touch` preferences.
 
 The N64 Rumble Pak drives the phone's vibrator. A real controller hides the
 overlay and takes over (SDL hot-plug, untested so far).
@@ -127,8 +139,7 @@ overlay and takes over (SDL hot-plug, untested so far).
 
 ## Open items
 
-- Touch settings (look sensitivity, opacity, layout, left-handed) and a
-  touch-friendly F10 overlay.
+- A touch-friendly F10 (PC options) overlay; a left-hand fire button.
 - Split-screen with several real controllers; touch as one seat of a local
   match.
 - PAL / JP builds (`-Pge.romId`) and per-region SHA-1s in `SetupActivity`.

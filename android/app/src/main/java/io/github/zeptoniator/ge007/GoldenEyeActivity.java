@@ -29,6 +29,7 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
 
     private static Vibrator vibrator;
     private TouchOverlay overlay;
+    private TouchSettingsPanel settings;
     private InputManager inputManager;
 
     @Override
@@ -48,6 +49,10 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
             overlay = new TouchOverlay(this);
             mLayout.addView(overlay, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            settings = new TouchSettingsPanel(this, overlay);
+            mLayout.addView(settings, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            overlay.setListener(() -> settings.show());
             inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
             inputManager.registerInputDeviceListener(this, new Handler(Looper.getMainLooper()));
             updateOverlayForControllers();
@@ -65,6 +70,14 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
 
     /** Back = a short Start press (the watch / pause menu). */
     private void backPressed() {
+        if (settings != null && settings.isOpen()) {
+            settings.hide();
+            return;
+        }
+        if (overlay != null && overlay.isEditing()) {
+            overlay.setEditMode(false);
+            return;
+        }
         if (overlay == null || overlay.getVisibility() != android.view.View.VISIBLE) {
             return; // a real pad is in use: its own Start button pauses
         }
