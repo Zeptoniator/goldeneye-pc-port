@@ -39,6 +39,26 @@ int SDL_main(int argc, char *argv[])
     mkdir("data", 0775);
     __android_log_print(ANDROID_LOG_INFO, "ge007", "data directory: %s/data", base);
 
+    /* Testing: an app gets no environment from adb, so "--setenv NAME=VALUE"
+     * (from the launch intent's "args" extra) sets one before the game reads
+     * it -- the PC harnesses (GE_STARTMP, GE_MPVIRT, GE_INPUTSCRIPT...) then
+     * work on a phone. The pair is removed from the arguments. */
+    int n = 0;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--setenv") == 0 && i + 1 < argc) {
+            char *eq = strchr(argv[i + 1], '=');
+            if (eq) {
+                *eq = 0;
+                setenv(argv[i + 1], eq + 1, 1);
+                __android_log_print(ANDROID_LOG_INFO, "ge007", "env %s=%s", argv[i + 1], eq + 1);
+            }
+            i++;
+            continue;
+        }
+        argv[n++] = argv[i];
+    }
+    argc = n;
+
     /* The game is not re-entrant (static state everywhere, and the 4 GiB
      * address window stays reserved), but Android keeps the process alive
      * after SDL_main returns and would run a relaunch in it. Leave for good. */

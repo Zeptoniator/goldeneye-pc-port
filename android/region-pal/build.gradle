@@ -1,0 +1,3 @@
+// libmain_pal.so: the game for the PAL (Europe) ROM. See ../region-lib.gradle.
+ext.geRomId = 'pal-final'
+apply from: '../region-lib.gradle'

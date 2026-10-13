@@ -80,6 +80,28 @@ public class TouchSettingsPanel extends FrameLayout {
         addSlider(R.string.touch_opacity, "opacity", 10, 100, 100);
         addSlider(R.string.touch_size, "size", 70, 150, 100);
         addPrefSwitch(R.string.touch_haptics, "haptics", true);
+        addSwitch(R.string.touch_with_pads, () -> prefs.getBoolean("withPads", false), on -> {
+            prefs.edit().putBoolean("withPads", on).apply();
+            ((GoldenEyeActivity) getContext()).updateOverlayForControllers();
+        }, null);
+        addNote(R.string.touch_with_pads_note);
+
+        addHeader(R.string.opt_app);
+        TextView rom = new TextView(context);
+        rom.setText(context.getString(R.string.opt_rom,
+                context.getString(Regions.label(Regions.active(context)))));
+        rom.setTextColor(0xFFE0E0E0);
+        rom.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        rom.setPadding(0, px(4), 0, px(2));
+        rows.addView(rom);
+        LinearLayout app = new LinearLayout(context);
+        app.setOrientation(LinearLayout.HORIZONTAL);
+        app.addView(action(R.string.opt_change_rom, v -> {
+            hide();
+            ((GoldenEyeActivity) getContext()).changeRom();
+        }));
+        app.addView(action(R.string.licences_title, v -> Licences.show((GoldenEyeActivity) getContext())));
+        rows.addView(app);
 
         LinearLayout actions = new LinearLayout(context);
         actions.setOrientation(LinearLayout.HORIZONTAL);

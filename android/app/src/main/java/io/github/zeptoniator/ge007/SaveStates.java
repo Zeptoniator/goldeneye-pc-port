@@ -9,7 +9,8 @@ import java.util.Date;
 
 /**
  * Savestates (port/src/savestate.c through port/android/android_savestate.c):
- * the files live in data/states/ next to the Bond file saves.
+ * the files live in data/states/ (US) or data/states-<region>/ next to the
+ * Bond file saves.
  *
  * Slot 0 is the automatic one, written every 45 s of a mission and when the
  * app leaves the screen, and offered back at the next launch; slots 1-3 are
@@ -34,7 +35,10 @@ final class SaveStates {
     }
 
     static File file(Activity a, int slot) {
-        File dir = new File(SetupActivity.dataDir(a), "states");
+        // One directory per region: a state loads only in the game that wrote it.
+        String region = Regions.active(a);
+        File dir = new File(SetupActivity.dataDir(a),
+                Regions.NTSC.equals(region) ? "states" : "states-" + region);
         //noinspection ResultOfMethodCallIgnored
         dir.mkdirs();
         return new File(dir, slot == AUTO ? "auto.ge7s" : ("slot" + slot + ".ge7s"));

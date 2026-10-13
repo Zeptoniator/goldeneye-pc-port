@@ -33,7 +33,10 @@ import java.util.List;
  * (front end, watch, pause: OK, BACK). Both have the floating move stick on
  * the left 42 % of the screen, START, the PC options MENU and the settings
  * gear. The playing set is an arc around FIRE under the right thumb;
- * dragging from FIRE also looks, so one thumb can aim and shoot.
+ * dragging from FIRE also looks, so one thumb can aim and shoot. While the
+ * PC options overlay (F10, the MENU button) is open only the corner buttons
+ * stay and the panel itself is touched: tap a row, swipe up/down through
+ * the list, swipe a slider.
  *
  * The gear opens TouchSettingsPanel (sensitivity, opacity, size, haptics,
  * layout editing). Settings and moved buttons persist in the "touch"
@@ -55,13 +58,22 @@ public class TouchOverlay extends View {
     static native void nativeSetEnabled(boolean on);
     /** 0 = front end, 1 = playing, 2 = watch / pause (port/src/input.c). */
     static native int nativeContext();
+    static native void nativePointer(int x, int y, int action);
+    static native void nativeOptionsScroll(int steps);
 
     static final String PREFS = "touch";
     /** Base look gain: port mouse pixels per screen pixel at 100 %. */
     private static final float LOOK_BASE = 2.5f;
 
     // Which button sets a button belongs to.
-    private static final int IN_MENU = 1, IN_GAME = 2, ALWAYS = IN_MENU | IN_GAME;
+    private static final int IN_MENU = 1, IN_GAME = 2, IN_OPTIONS = 4, ALWAYS = IN_MENU | IN_GAME | IN_OPTIONS;
+
+    // F10 options overlay (context IN_OPTIONS): one finger is a pointer. A
+    // tap clicks where it lands, a vertical swipe steps through the list, a
+    // horizontal swipe drags (sliders).
+    private static final int OPT_UNDECIDED = 0, OPT_SCROLL = 1, OPT_DRAG = 2;
+    private int optPointer = -1, optMode;
+    private float optX0, optY0, optX, optY, optStepY;
 
     // Icons (drawn in drawIcon).
     private static final int IC_BULLET = 1, IC_AIM = 2, IC_HAND = 3, IC_RELOAD = 4, IC_GUN = 5,
@@ -142,7 +154,8 @@ public class TouchOverlay extends View {
     private final Runnable contextPoll = new Runnable() {
         @Override
         public void run() {
-            int c = nativeContext() == 1 ? IN_GAME : IN_MENU;
+            int n = nativeContext();
+            int c = n == 1 ? IN_GAME : n == 3 ? IN_OPTIONS : IN_MENU;
             if (c != context && !editMode) {
                 releaseAll();   // nothing stays held across a set change
                 context = c;
@@ -233,6 +246,11 @@ public class TouchOverlay extends View {
     }
 
     /** Show or hide the controls (hidden while a real controller is connected). */
+    /** Touch settings: keep the controls (as player 1) when a controller is connected. */
+    public boolean keptWithControllers() {
+        return prefs().getBoolean("withPads", false);
+    }
+
     public void setActive(boolean on) {
         if (active == on) {
             return;
@@ -440,6 +458,16 @@ public class TouchOverlay extends View {
                 return;
             }
         }
+        if (context == IN_OPTIONS) {
+            if (optPointer < 0) {
+                optPointer = id;
+                optMode = OPT_UNDECIDED;
+                optX0 = optX = x;
+                optY0 = optY = y;
+                nativePointer(Math.round(x), Math.round(y), 0);   // hover cue under the finger
+            }
+            return;
+        }
         if (stickPointer < 0 && x < stickZoneRight) {
             stickPointer = id;
             // Keep the whole base on screen.
@@ -454,6 +482,10 @@ public class TouchOverlay extends View {
     }
 
     private void pointerMove(int id, float x, float y) {
+        if (id == optPointer) {
+            optionsMove(x, y);
+            return;
+        }
         if (id == stickPointer) {
             stickX = x;
             stickY = y;
@@ -472,7 +504,50 @@ public class TouchOverlay extends View {
         }
     }
 
+    private void optionsMove(float x, float y) {
+        optX = x;
+        optY = y;
+        if (optMode == OPT_UNDECIDED) {
+            float dx = x - optX0, dy = y - optY0, slop = 10 * dp;
+            if (Math.abs(dy) > slop && Math.abs(dy) >= Math.abs(dx)) {
+                optMode = OPT_SCROLL;
+                optStepY = optY0;
+            } else if (Math.abs(dx) > slop) {
+                optMode = OPT_DRAG;
+                nativePointer(Math.round(optX0), Math.round(optY0), 1);
+            }
+        }
+        if (optMode == OPT_SCROLL) {
+            // One row per step of finger travel; down shows the rows above.
+            float step = 30 * dp;
+            int n = (int) ((y - optStepY) / step);
+            if (n != 0) {
+                nativeOptionsScroll(n);
+                optStepY += n * step;
+            }
+        } else if (optMode == OPT_DRAG) {
+            nativePointer(Math.round(x), Math.round(y), 0);
+        }
+    }
+
+    private void optionsUp() {
+        if (optMode == OPT_UNDECIDED) {
+            // A tap: press and release where it started (the press is
+            // latched natively until the overlay has read it).
+            nativePointer(Math.round(optX0), Math.round(optY0), 1);
+            nativePointer(Math.round(optX0), Math.round(optY0), 2);
+            feedback();
+        } else if (optMode == OPT_DRAG) {
+            nativePointer(Math.round(optX), Math.round(optY), 2);
+        }
+        optPointer = -1;
+    }
+
     private void pointerUp(int id) {
+        if (id == optPointer) {
+            optionsUp();
+            return;
+        }
         if (id == stickPointer) {
             stickPointer = -1;
             nativeAxis(AXIS_LEFTX, 0);
@@ -491,6 +566,10 @@ public class TouchOverlay extends View {
 
     /** Let go of everything (and tell the game). */
     public void releaseAll() {
+        if (optPointer >= 0 && optMode == OPT_DRAG) {
+            nativePointer(Math.round(optX), Math.round(optY), 2);
+        }
+        optPointer = -1;
         stickPointer = -1;
         nativeAxis(AXIS_LEFTX, 0);
         nativeAxis(AXIS_LEFTY, 0);
@@ -608,7 +687,7 @@ public class TouchOverlay extends View {
         }
         if (editMode) {
             c.drawColor(0x66000000);
-        } else {
+        } else if (context != IN_OPTIONS) {
             drawStick(c);
         }
         for (Button b : buttons) {

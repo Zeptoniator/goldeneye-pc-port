@@ -14,3 +14,6 @@ dependencyResolutionManagement {
 }
 rootProject.name = "GE007Android"
 include(":app")
+// libmain_pal.so / libmain_jpn.so (android/region-lib.gradle).
+include(":region-pal")
+include(":region-jpn")

@@ -10,7 +10,12 @@ difficulty, briefing) into Dam with its intro cutscene, `-level_09`
 Back, background/resume, on-device asset conversion byte-identical to the
 PC converters; savestates: save from the panel, Home then a killed app
 then "Resume" back into the mission, saves after a load, the periodic
-automatic save. 120 Hz presents with frame interpolation (99-120/s on Dam);
+automatic save; F10 by touch (open, tap a page, drag a slider), a 2-player
+split-screen match with touch as player 1 and a virtual controller as
+player 2 (`--test-pads 1 --setenv GE_STARTMP=2,1`), Change ROM and the
+licences screen. **On an emulator (Android 36 x86_64, ARM translation):**
+the PAL ROM picked in the system file picker, converted on the device, and
+`libmain_pal.so` booting at the fixed address. 120 Hz presents with frame interpolation (99-120/s on Dam);
 about 60 % of one core in game, 1 % in the background. **Not verified yet:** a whole campaign, split-screen
 multiplayer, a real Bluetooth/USB controller (the overlay should hide
 itself), 16 KB-page devices, devices with a 48-bit address space only.
@@ -34,22 +39,35 @@ The native side is the top-level `CMakeLists.txt` (its `ANDROID` branches);
 for quick compile iterations without Gradle:
 `ANDROID_NDK=<ndk> GE_SDL2_SOURCE_DIR=<sdl2> scripts/android/build-native.sh`.
 
-The APK carries no game data. It is built for one region (`-Pge.romId`,
-default `ntsc-final`); only the US ROM is accepted today, as for the PC
-release packages.
+The APK carries no game data. It carries the game once per ROM region:
+`libmain.so` (US, built by the app module), `libmain_pal.so` and
+`libmain_jpn.so` (the `android/region-pal` and `region-jpn` library
+modules: same CMake project, another `ROMID`; `android/region-lib.gradle`).
+`-Pge.regions=ntsc-final` builds the US one only, for quicker iterations.
+PAL and JP are at the PC port's own level for those regions (they convert,
+build and boot; ROADMAP §1 owes their full runtime passes).
 
 ## First run
 
 `SetupActivity` (the launcher) asks for the player's own ROM through the
 system file picker, accepts `.z64`/`.v64`/`.n64` byte orders, checks the
-SHA-1 against the README table, copies it to the app's data directory and
+SHA-1 against the README table (US, Europe or Japan: the hash gives the
+region, `Regions.java`), copies it to the app's data directory and
 runs the PC converters (`tools_pc/d43_emit.py`, `d69_emit.py`,
 `d88_emit.py`, unchanged) on the device with an embedded Python
 (Chaquopy, `android/app/src/main/python/ge007_convert.py`). The converter
 inputs that are not the ROM are a few committed repo files (ROM file lists,
 file resource table, model file headers), zipped into the APK at build time.
 About 3 s on a PC, a few more on a phone. A stamp file
-(`data/.android-convert-stamp`) makes an APK update reconvert.
+(`data/.android-convert-stamp`, `-<region>` for PAL/JP) makes an APK update
+reconvert. Each region keeps its own ROM and sidecars side by side; the last
+one imported is the active region, whose library `GoldenEyeActivity` loads.
+Gear -> **Change ROM...** restarts the app into `SetupActivity` (a game
+cannot be unloaded from its process): pick another ROM, or play a region
+imported before. **Licences** (there and on the setup screen) shows
+`assets/licences.txt`, put together at build time from `LICENSE`, `NOTICE`,
+`port/fast3d/LICENSE.txt`, SDL2's licence and `android/licences/` (CPython,
+the software it incorporates, Chaquopy, the runtime's other libraries).
 
 The game's `data/` directory is
 `/sdcard/Android/data/io.github.zeptoniator.ge007/files/data/` (ROM,
@@ -63,6 +81,12 @@ Test launches take arguments from an intent extra:
 adb shell am start -S -n io.github.zeptoniator.ge007/.GoldenEyeActivity --es args "-level_09"
 adb logcat -s ge007   # every sysLogPrintf line is mirrored to logcat
 ```
+
+An app gets no environment from adb, so `--setenv NAME=VALUE` (repeatable)
+sets one before the game starts: the PC harnesses work on the phone, e.g.
+`--setenv GE_STARTMP=2,0 --setenv GE_MPVIRT=1` for a 2-player match.
+`--test-pads N` attaches N idle virtual controllers that take seats like
+real ones.
 
 ## Controls
 
@@ -88,13 +112,31 @@ rings stay readable on snow and night levels.
 | Gear | — | always: options (game, touch) |
 | Disk | — | always: saves |
 
+**F10 (≡) by touch:** while the PC options overlay is open only the corner
+buttons stay; the panel is touched directly. A tap clicks where it lands
+(the overlay's own mouse handling: a setting's name selects it, the area
+right of it changes it), a vertical swipe steps through the list, a
+horizontal swipe drags a slider. Touch is fed as an absolute pointer
+(`androidTouchPointer`, read by `optionsoverlay.c` in place of
+`SDL_GetMouseState`); a press is held for at least one poll so a short tap
+still clicks.
+
 **Touch settings** (gear): look sensitivity, vertical look, invert vertical,
 button opacity and size, vibration on press, **move buttons** (drag any
-button of either set; Reset / Done), defaults. Stored in the app's
-`touch` preferences.
+button of either set; Reset / Done), keep touch with controllers, defaults.
+Stored in the app's `touch` preferences.
 
-The N64 Rumble Pak drives the phone's vibrator. A real controller hides the
-overlay and takes over (SDL hot-plug, untested so far).
+The N64 Rumble Pak drives the phone's vibrator.
+
+**Controllers and split-screen.** By default a real controller hides the
+overlay and takes player 1; with several, they are players 1-4 in
+connection order (the PC port's seats, `input.c`), and the game's
+multiplayer menu opens with 2+. With **Keep touch with controllers** on,
+the on-screen pad stays in seat 0 and its look drag rides on the
+keyboard/mouse block of the same slot: touch is player 1, controllers are
+players 2-4 (`mpRoute` returns no shift while the on-screen pad holds seat
+0; outside a match the pad is moved back to seat 0). Touch alone counts as
+one controller (it used to count as two: keyboard/mouse plus the pad).
 
 ## Saves at any moment (savestates)
 
@@ -207,9 +249,8 @@ thread (`port/android/android_game.c`, the same rule as watchsettings.c).
 
 ## Open items
 
-- A touch-friendly F10 (PC options) overlay; a left-hand fire button.
-- Split-screen with several real controllers; touch as one seat of a local
-  match.
-- PAL / JP builds (`-Pge.romId`) and per-region SHA-1s in `SetupActivity`.
+- A left-hand fire button.
+- Split-screen with real Bluetooth/USB controllers on a phone (verified with
+  virtual ones only).
+- PAL / JP runtime passes (as for the PC builds); JP not run on a phone.
 - A whole-campaign pass on a phone, and a mid-range Adreno/Mali device.
-- APK licence notices screen (SDL2 zlib, CPython PSF, Chaquopy MIT).

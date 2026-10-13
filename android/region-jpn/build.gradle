@@ -1,0 +1,3 @@
+// libmain_jpn.so: the game for the NTSC-J (Japan) ROM. See ../region-lib.gradle.
+ext.geRomId = 'jpn-final'
+apply from: '../region-lib.gradle'

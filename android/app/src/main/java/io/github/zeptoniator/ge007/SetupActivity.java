@@ -36,17 +36,18 @@ import java.security.MessageDigest;
  * asset sidecars, then starts the game.
  *
  * The APK ships no game data. On first launch the player picks their own
- * GoldenEye 007 ROM; it is checked (byte order, SHA-1), copied to data/, and
- * converted on the device by the PC port's own converters (Python, see
- * src/main/python/ge007_convert.py). Later launches go straight to the game,
- * unless an APK update changed the converters (data/.android-convert-stamp).
+ * GoldenEye 007 ROM (US, Europe or Japan, see Regions); it is checked (byte
+ * order, SHA-1 gives the region), copied to data/, and converted on the
+ * device by the PC port's own converters (Python, see
+ * src/main/python/ge007_convert.py). Later launches go straight to the game
+ * of the active region, unless an APK update changed the converters
+ * (data/.android-convert-stamp[-region]). EXTRA_CHANGE_ROM (the options
+ * panel) shows the screen anyway: pick another ROM, or switch to a region
+ * imported before.
  */
 public class SetupActivity extends Activity {
 
-    /** The region the native library is built for (app/build.gradle ge.romId). */
-    static final String REGION = "ntsc-final";
-    /** SHA-1 of the supported dump (README, "What's a ROM?"). */
-    static final String ROM_SHA1 = "abe01e4aeb033b6c0836819f549c791b26cfde83";
+    static final String EXTRA_CHANGE_ROM = "changeRom";
     private static final int PICK_ROM = 1;
     private static final String STAMP = ".android-convert-stamp";
 
@@ -65,14 +66,14 @@ public class SetupActivity extends Activity {
         return new File(base, "data");
     }
 
-    static File romFile(Activity a) {
-        return new File(dataDir(a), "ge007." + REGION + ".z64");
+    static File romFile(Activity a, String region) {
+        return new File(dataDir(a), "ge007." + region + ".z64");
     }
 
-    private static boolean sidecarsPresent(File data) {
+    private static boolean sidecarsPresent(File data, String region) {
         String[] needed = {
-            "pcmodels-" + REGION + "/pcmodels.bin", "pcmodels-" + REGION + "/manifest.csv",
-            "pccg-" + REGION + "/pccg.bin", "pccg-" + REGION + "/manifest.csv",
+            "pcmodels-" + region + "/pcmodels.bin", "pcmodels-" + region + "/manifest.csv",
+            "pccg-" + region + "/pccg.bin", "pccg-" + region + "/manifest.csv",
         };
         for (String n : needed) {
             if (!new File(data, n).isFile()) {
@@ -82,17 +83,21 @@ public class SetupActivity extends Activity {
         return true;
     }
 
-    private String stampValue() {
+    private static File stampFile(File data, String region) {
+        return new File(data, Regions.NTSC.equals(region) ? STAMP : STAMP + "-" + region);
+    }
+
+    private String stampValue(String region) {
         try {
             PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
-            return pi.versionName + "/" + pi.getLongVersionCode() + "/" + REGION;
+            return pi.versionName + "/" + pi.getLongVersionCode() + "/" + region;
         } catch (Exception e) {
-            return REGION;
+            return region;
         }
     }
 
-    private boolean stampCurrent(File data) {
-        File f = new File(data, STAMP);
+    private boolean stampCurrent(File data, String region) {
+        File f = stampFile(data, region);
         if (!f.isFile()) {
             // Data pushed by scripts/android/push-data.sh: trust it.
             return true;
@@ -100,16 +105,19 @@ public class SetupActivity extends Activity {
         try (InputStream in = new FileInputStream(f)) {
             byte[] b = new byte[256];
             int n = in.read(b);
-            return n > 0 && new String(b, 0, n, StandardCharsets.UTF_8).trim().equals(stampValue());
+            return n > 0 && new String(b, 0, n, StandardCharsets.UTF_8).trim().equals(stampValue(region));
         } catch (IOException e) {
             return false;
         }
     }
 
-    /** True when the game can start right away. */
+    private static boolean regionReady(Activity a, String region) {
+        return romFile(a, region).isFile() && sidecarsPresent(dataDir(a), region);
+    }
+
+    /** True when the game of the active region can start right away. */
     static boolean dataReady(Activity a) {
-        File data = dataDir(a);
-        return romFile(a).isFile() && sidecarsPresent(data);
+        return regionReady(a, Regions.active(a));
     }
 
     @Override
@@ -118,16 +126,18 @@ public class SetupActivity extends Activity {
         File data = dataDir(this);
         //noinspection ResultOfMethodCallIgnored
         data.mkdirs();
+        String region = Regions.active(this);
+        boolean change = getIntent().getBooleanExtra(EXTRA_CHANGE_ROM, false);
 
-        if (romFile(this).isFile() && sidecarsPresent(data) && stampCurrent(data)) {
+        if (!change && regionReady(this, region) && stampCurrent(data, region)) {
             startGame();
             return;
         }
         buildUi();
-        if (romFile(this).isFile()) {
+        if (!change && romFile(this, region).isFile()) {
             // ROM already there (earlier import, or an APK update changed the
             // converters): just convert again.
-            runInBackground(this::convertOnly);
+            runInBackground(() -> convertOnly(region));
         }
     }
 
@@ -170,6 +180,32 @@ public class SetupActivity extends Activity {
         pick.setText(R.string.setup_pick);
         pick.setOnClickListener(v -> pickRom());
         col.addView(pick);
+
+        // Regions imported before: switch without importing again.
+        for (String r : Regions.ALL) {
+            if (Regions.built(r) && regionReady(this, r)) {
+                Button play = new Button(this);
+                play.setText(getString(R.string.setup_play_region, getString(Regions.label(r))));
+                play.setOnClickListener(v -> {
+                    if (busy) {
+                        return;
+                    }
+                    if (stampCurrent(dataDir(this), r)) {
+                        Regions.setActive(this, r);
+                        startGame();
+                    } else {
+                        runInBackground(() -> convertOnly(r));
+                    }
+                });
+                col.addView(play);
+            }
+        }
+
+        Button licences = new Button(this, null, android.R.attr.borderlessButtonStyle);
+        licences.setText(R.string.licences_title);
+        licences.setTextColor(0xFF999999);
+        licences.setOnClickListener(v -> Licences.show(this));
+        col.addView(licences);
 
         details = new TextView(this);
         details.setTextColor(0xFF999999);
@@ -272,6 +308,7 @@ public class SetupActivity extends Activity {
     private void importRom(Uri uri) {
         setBusy(true, R.string.setup_checking);
         byte[] rom;
+        String region;
         try (InputStream in = getContentResolver().openInputStream(uri)) {
             if (in == null) {
                 throw new IOException("cannot open");
@@ -296,17 +333,26 @@ public class SetupActivity extends Activity {
             }
             toZ64(rom);
             String h = sha1(rom);
-            if (!h.equals(ROM_SHA1)) {
+            region = Regions.forSha1(h);
+            if (region == null) {
                 String country = rom.length > 0x3E ? String.valueOf((char) (rom[0x3E] & 0xFF)) : "?";
-                fail(R.string.setup_wrong_rom, "SHA-1 " + h + "\n(expected " + ROM_SHA1
-                        + ", GoldenEye 007 USA)\ncountry code: " + country);
+                StringBuilder exp = new StringBuilder();
+                for (String r : Regions.ALL) {
+                    exp.append("\n").append(Regions.sha1(r)).append("  ").append(getString(Regions.label(r)));
+                }
+                fail(R.string.setup_wrong_rom, "SHA-1 " + h + "\ncountry code: " + country
+                        + "\n\nexpected one of:" + exp);
+                return;
+            }
+            if (!Regions.built(region)) {
+                fail(R.string.setup_region_missing, getString(Regions.label(region)));
                 return;
             }
         } catch (Exception e) {
             fail(R.string.setup_not_rom, e.getMessage());
             return;
         }
-        File dst = romFile(this);
+        File dst = romFile(this, region);
         File tmp = new File(dst.getPath() + ".part");
         try (OutputStream out = new FileOutputStream(tmp)) {
             out.write(rom);
@@ -320,7 +366,7 @@ public class SetupActivity extends Activity {
             fail(R.string.setup_write_failed, tmp.getPath());
             return;
         }
-        convertOnly();
+        convertOnly(region);
     }
 
     /** Progress callback for the Python side (ge007_convert.convert). */
@@ -333,7 +379,8 @@ public class SetupActivity extends Activity {
         }
     }
 
-    private void convertOnly() {
+    /** Convert the region's ROM, make it the active region, start the game. */
+    private void convertOnly(String region) {
         setBusy(true, R.string.setup_preparing);
         File data = dataDir(this);
         File work = new File(getCacheDir(), "convert");
@@ -354,8 +401,8 @@ public class SetupActivity extends Activity {
                 Python.start(new AndroidPlatform(this));
             }
             PyObject mod = Python.getInstance().getModule("ge007_convert");
-            mod.callAttr("convert", work.getPath(), zip.getPath(), romFile(this).getPath(),
-                    data.getPath(), REGION, new Progress());
+            mod.callAttr("convert", work.getPath(), zip.getPath(), romFile(this, region).getPath(),
+                    data.getPath(), region, new Progress());
         } catch (Throwable t) {
             fail(R.string.setup_convert_failed, t.getMessage());
             return;
@@ -363,11 +410,12 @@ public class SetupActivity extends Activity {
             //noinspection ResultOfMethodCallIgnored
             zip.delete();
         }
-        try (OutputStream out = new FileOutputStream(new File(data, STAMP))) {
-            out.write(stampValue().getBytes(StandardCharsets.UTF_8));
+        try (OutputStream out = new FileOutputStream(stampFile(data, region))) {
+            out.write(stampValue(region).getBytes(StandardCharsets.UTF_8));
         } catch (IOException ignored) {
             // Without the stamp the data is still used (see stampCurrent).
         }
+        Regions.setActive(this, region);
         ui.post(this::startGame);
     }
 }

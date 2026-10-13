@@ -31,6 +31,14 @@ into the PC port; it belongs to the N64 decompilation build):
     are build tooling only: they are never linked into the port, and they are
     not part of any download package.
 
+The Android APK (android/, experimental) bundles, at build time, components
+that are not vendored in this repository and keep their own licenses: SDL2
+(zlib License, from the SDL2 source tree the build is pointed at) and an
+embedded Python runtime from Chaquopy (MIT): CPython 3.13 (PSF License) with
+the software it incorporates (OpenSSL under Apache-2.0, zlib, expat, libffi,
+libmpdec, ...) and bzip2, liblzma, SQLite. Their license texts are in
+android/licences/ and shown in the app (Licences).
+
 It does NOT cover:
 
   * src/, include/, assets/, Makefile, tools/, rsp/, ld/, and the other

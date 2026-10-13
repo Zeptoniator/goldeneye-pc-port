@@ -13,8 +13,8 @@
  * in __CSPVoiceHandler (and no further state could be saved). At a fixed
  * address there is nothing to shift.
  *
- * GoldenEyeActivity.loadLibraries() calls this before SDL's own
- * System.loadLibrary("main"), which then finds the library already loaded
+ * GoldenEyeActivity.loadLibraries() calls this (for the region's
+ * libmain*.so) before SDL's own System.loadLibrary, which then finds it loaded
  * (same file, same namespace: this library's) and registers it with ART for
  * the JNI lookups. On failure the normal random-address load follows and
  * savestate.c falls back to the shift.
@@ -40,14 +40,10 @@
 
 #define LOG_TAG "ge007"
 
-/* Returns libmain.so's load base, 0 if it could not go to GE_IMAGE_BASE. */
-JNIEXPORT jlong JNICALL
-Java_io_github_zeptoniator_ge007_GoldenEyeActivity_nativeLoadMainFixed(JNIEnv *env, jclass cls)
+static jlong loadFixed(const char *soname)
 {
-    (void)env;
-    (void)cls;
     Dl_info info;
-    void *h = dlopen("libmain.so", RTLD_NOW | RTLD_NOLOAD);
+    void *h = dlopen(soname, RTLD_NOW | RTLD_NOLOAD);
     if (h) {
         /* Already in this process (the activity was re-created). */
         void *sym = dlsym(h, "SDL_main");
@@ -61,7 +57,7 @@ Java_io_github_zeptoniator_ge007_GoldenEyeActivity_nativeLoadMainFixed(JNIEnv *e
                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
     if (r != want) {
         /* Taken, or a pre-4.17 kernel that read the flag as a hint. */
-        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "libmain.so: %p is not free (%s)", want,
+        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "%s: %p is not free (%s)", soname, want,
                             r == MAP_FAILED ? strerror(errno) : "mapped elsewhere");
         if (r != MAP_FAILED) {
             munmap(r, GE_IMAGE_RESERVE);
@@ -74,14 +70,29 @@ Java_io_github_zeptoniator_ge007_GoldenEyeActivity_nativeLoadMainFixed(JNIEnv *e
     ext.flags = ANDROID_DLEXT_RESERVED_ADDRESS;
     ext.reserved_addr = r;
     ext.reserved_size = GE_IMAGE_RESERVE;
-    h = android_dlopen_ext("libmain.so", RTLD_NOW | RTLD_GLOBAL, &ext);
+    h = android_dlopen_ext(soname, RTLD_NOW | RTLD_GLOBAL, &ext);
     if (!h) {
-        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "libmain.so: fixed load failed: %s", dlerror());
+        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "%s: fixed load failed: %s", soname, dlerror());
         munmap(r, GE_IMAGE_RESERVE);
         return 0;
     }
     void *sym = dlsym(h, "SDL_main");
     jlong base = (sym && dladdr(sym, &info)) ? (jlong)(uintptr_t)info.dli_fbase : 0;
-    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "libmain.so loaded at %p", (void *)(uintptr_t)base);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "%s loaded at %p", soname, (void *)(uintptr_t)base);
+    return base;
+}
+
+/* soname: the region's game library (libmain.so, libmain_pal.so, ...).
+ * Returns its load base, 0 if it could not go to GE_IMAGE_BASE. */
+JNIEXPORT jlong JNICALL
+Java_io_github_zeptoniator_ge007_GoldenEyeActivity_nativeLoadMainFixed(JNIEnv *env, jclass cls, jstring jname)
+{
+    (void)cls;
+    const char *soname = (*env)->GetStringUTFChars(env, jname, NULL);
+    if (!soname) {
+        return 0;
+    }
+    jlong base = loadFixed(soname);
+    (*env)->ReleaseStringUTFChars(env, jname, soname);
     return base;
 }

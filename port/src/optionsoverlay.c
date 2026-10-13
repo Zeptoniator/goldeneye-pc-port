@@ -65,6 +65,10 @@ extern MENU current_menu;
 /* file2.c; same extern as watchsettings.c (not in a header). */
 extern save_data *fileGetSaveForFoldernum(u32 folder);
 
+#if defined(PLATFORM_ANDROID)
+int androidTouchPointer(int *x, int *y);   /* port/android/android_touch.c */
+#endif
+
 /* D324 class: -Iinclude resolves <math.h> to GE's N64 stub, which does not
  * declare lround; without this the call is an implicit `int lround()`
  * (GCC only rescued it via its builtin signature). */
@@ -2498,6 +2502,12 @@ static void overlayHandleInputLocked(void)
     Uint32 mb = SDL_GetMouseState(&mx, &my);
     int lmb = (mb & SDL_BUTTON(SDL_BUTTON_LEFT))  ? 1 : 0;
     int rmb = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) ? 1 : 0;
+#if defined(PLATFORM_ANDROID)
+    /* Touch never becomes SDL mouse input on Android: taps and drags on the
+     * panel arrive as an absolute pointer (port/android/android_touch.c). */
+    lmb = androidTouchPointer(&mx, &my);
+    rmb = 0;
+#endif
 
     /* D396: B backs out one F10 page (closes from root); A/X accept/toggle
      * on an edge, not slider adjustment. Only D-pad/left-stick X (or keyboard

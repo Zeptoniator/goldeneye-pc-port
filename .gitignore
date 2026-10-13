@@ -214,4 +214,6 @@ docs/media/*.mp4
 /android/build/
 /android/app/build/
 /android/app/.cxx/
+/android/region-*/build/
+/android/region-*/.cxx/
 /android/third_party/

@@ -3,22 +3,16 @@ plugins {
     id 'com.chaquo.python'
 }
 
-// The SDL2 2.x source tree: its Java glue (SDLActivity & co.) is compiled
-// into the app and its C side is built by the top-level CMakeLists.txt.
-// -Pge.sdl2Dir=..., GE_SDL2_SOURCE_DIR, ge.sdl2Dir in local.properties, or
-// scripts/android/fetch-sdl2.sh's
-// default location (android/third_party/SDL2, git-ignored).
-def localProps = new Properties()
-def localPropsFile = rootProject.file('local.properties')
-if (localPropsFile.exists()) {
-    localPropsFile.withInputStream { localProps.load(it) }
+// SDL2 source tree: see the root build.gradle.
+def sdl2Dir = rootProject.ext.geSdl2Dir
+// ROM regions in the APK: the app module builds libmain.so (US, always);
+// android/region-pal and region-jpn add libmain_pal.so and libmain_jpn.so.
+// -Pge.regions=ntsc-final for a quicker US-only build.
+def geRegions = providers.gradleProperty('ge.regions')
+        .getOrElse('ntsc-final,pal-final,jpn-final').split(',')*.trim().findAll { it }
+if (!geRegions.contains('ntsc-final')) {
+    geRegions = ['ntsc-final'] + geRegions
 }
-def sdl2Dir = providers.gradleProperty('ge.sdl2Dir')
-        .orElse(providers.environmentVariable('GE_SDL2_SOURCE_DIR'))
-        .getOrElse(localProps.getProperty('ge.sdl2Dir', "${rootProject.projectDir}/third_party/SDL2"))
-// Region the native library is built for (the ROM pushed to the device must
-// match): ntsc-final (US, the default), pal-final, jpn-final.
-def romId = providers.gradleProperty('ge.romId').getOrElse('ntsc-final')
 
 android {
     namespace 'io.github.zeptoniator.ge007'
@@ -35,7 +29,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments "-DGE_SDL2_SOURCE_DIR=${sdl2Dir}",
-                          "-DROMID=${romId}",
+                          '-DROMID=ntsc-final',
                           '-DANDROID_STL=c++_static'
                 targets 'ge007', 'SDL2', 'geload'
             }
@@ -43,6 +37,7 @@ android {
         ndk {
             abiFilters 'arm64-v8a'
         }
+        buildConfigField 'String', 'GE_REGIONS', "\"${geRegions.join(',')}\""
     }
 
     buildTypes {
@@ -70,9 +65,15 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig true
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = false
+            // Each region module builds SDL2 too (a dependency of its libmain).
+            pickFirsts += ['**/libSDL2.so']
         }
     }
 
@@ -118,5 +119,43 @@ def convertInputs = tasks.register('ge007ConvertInputs', Zip) {
         includeEmptyDirs = false
     }
 }
+
+// The licences screen (Licences.java): this project's LICENSE and NOTICE,
+// then every third-party component in the APK, in one text asset. The
+// texts that are not in the repo or the SDL2 tree are in android/licences/.
+def licenceParts = [
+    ['GoldenEye 007 PC port (this app) - MIT License', "${repoRoot}/LICENSE"],
+    ['What the license covers (NOTICE)', "${repoRoot}/NOTICE"],
+    ['fast3d (port/fast3d)', "${repoRoot}/port/fast3d/LICENSE.txt"],
+    ['SDL2 - zlib License', "${sdl2Dir}/LICENSE.txt"],
+    ['Python 3.13 (CPython) - PSF License', "${rootDir}/licences/python-LICENSE.txt"],
+    ['Software incorporated in Python (OpenSSL, expat, libffi, zlib, libmpdec, ...)',
+     "${rootDir}/licences/python-incorporated.rst"],
+    ['Chaquopy (embedded Python) - MIT License', "${rootDir}/licences/chaquopy-LICENSE.txt"],
+    ['Other libraries in the Python runtime', "${rootDir}/licences/runtime-libraries.txt"],
+]
+def licencesAsset = tasks.register('ge007Licences') {
+    def out = layout.buildDirectory.file('generated/ge007/assets/licences.txt')
+    inputs.files(licenceParts.collect { it[1] })
+    outputs.file(out)
+    doLast {
+        def sb = new StringBuilder()
+        licenceParts.each { part ->
+            def rule = '=' * 72
+            sb << rule << '\n' << part[0] << '\n' << rule << '\n\n'
+            sb << new File(part[1]).getText('UTF-8').trim() << '\n\n\n'
+        }
+        out.get().asFile.text = sb.toString()
+    }
+}
 android.sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/ge007/assets').get().asFile)
-tasks.named('preBuild') { dependsOn convertInputs }
+tasks.named('preBuild') { dependsOn convertInputs, licencesAsset }
+
+dependencies {
+    if (geRegions.contains('pal-final')) {
+        implementation project(':region-pal')
+    }
+    if (geRegions.contains('jpn-final')) {
+        implementation project(':region-jpn')
+    }
+}

@@ -336,6 +336,13 @@ static int s_seatCompactOwed = 0;   /* a seat was vacated in a match */
 enum { MPR_KBMP1 = 1, MPR_PADSP1 = 2 };
 static int mpRoute(void)
 {
+#if defined(PLATFORM_ANDROID)
+    /* The on-screen pad kept alongside real controllers (touch settings,
+     * "Touch is player 1") sits in seat 0, and its look drag rides on the
+     * keyboard/mouse block, which is slot 0 too: player 1 is the touch
+     * player and seat s is player s + 1 with no shift either way. */
+    if (pads[0] && androidTouchIsPad(padInst[0])) return 0;
+#endif
     /* In a match, count the seats used at any point this match (the sticky
      * mask only grows), so an unplug never changes the routing. */
     int n = nRealPads;
@@ -1205,6 +1212,23 @@ static void inputOpenPads(void)
                          i, SDL_GameControllerName(pads[seat]), seat, padRumbleOn[seat] ? "yes" : "no");
         }
     }
+
+#if defined(PLATFORM_ANDROID)
+    /* 3b. outside a match the on-screen pad goes first (see mpRoute) */
+    for (int s = 1; s < MAX_PADS && !inMatch; ++s) {
+        if (!pads[s] || !androidTouchIsPad(padInst[s])) continue;
+        SDL_GameController *tp = pads[s];
+        SDL_JoystickID ti = padInst[s];
+        int tr = padRumbleOn[s], tf = padFamily[s];
+        for (int k = s; k > 0; --k) {
+            pads[k] = pads[k - 1];             padInst[k] = padInst[k - 1];
+            padRumbleOn[k] = padRumbleOn[k - 1]; padFamily[k] = padFamily[k - 1];
+        }
+        pads[0] = tp; padInst[0] = ti; padRumbleOn[0] = tr; padFamily[0] = tf;
+        sysLogPrintf(LOG_NOTE, "input: on-screen pad moved seat %d -> 0", s);
+        break;
+    }
+#endif
 
     /* 4. controller mask: seat bits, shifted up one when keyboard/mouse is P1 */
     int seatMask = 0;
@@ -2196,10 +2220,14 @@ static int inputCanUseGameplayActions(int menuMode)
 #if defined(PLATFORM_ANDROID)
 /* On-screen controls (port/android/android_touch.c): which button set to
  * show. 0 = front end, 1 = playing, 2 = in a stage but in the watch / pause
- * (menu buttons). Polled from the UI thread: plain reads, a stale answer
- * only shows the other set for one poll. */
+ * (menu buttons), 3 = the F10 options overlay (touched directly). Polled
+ * from the UI thread: plain reads, a stale answer only shows the other set
+ * for one poll. */
 int inputTouchContext(void)
 {
+    if (optionsOverlayIsOpen()) {
+        return 3;
+    }
     if (current_menu != GE_MENU_RUN_STAGE && current_menu != GE_MENU_INVALID) {
         return 0;
     }

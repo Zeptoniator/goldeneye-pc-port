@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="setup_intro">Cette application ne contient aucune donnée du jeu. Choisissez votre propre ROM de GoldenEye 007 (USA, .z64, .v64 ou .n64) : elle est vérifiée, copiée dans l\'application puis convertie une seule fois sur l\'appareil (quelques secondes).</string>
+    <string name="setup_intro">Cette application ne contient aucune donnée du jeu. Choisissez votre propre ROM de GoldenEye 007 (USA, Europe ou Japon ; .z64, .v64 ou .n64) : elle est vérifiée, copiée dans l\'application puis convertie une seule fois sur l\'appareil (quelques secondes).</string>
     <string name="setup_pick">Choisir la ROM…</string>
     <string name="setup_checking">Vérification de la ROM…</string>
     <string name="setup_preparing">Préparation des données du jeu…</string>
@@ -9,7 +9,7 @@
     <string name="setup_step_setups">Conversion des placements…</string>
     <string name="setup_read_failed">Impossible de lire le fichier.</string>
     <string name="setup_not_rom">Ce fichier n\'est pas une ROM N64.</string>
-    <string name="setup_wrong_rom">Ce n\'est pas la ROM prise en charge : cette version demande GoldenEye 007 (USA). Son SHA-1 est contrôlé pour qu\'un dump abîmé ou différent ne fasse pas planter le jeu plus tard.</string>
+    <string name="setup_wrong_rom">Ce n\'est pas une ROM prise en charge : l\'application demande GoldenEye 007 (USA, Europe ou Japon). Son SHA-1 est contrôlé pour qu\'un dump abîmé ou différent ne fasse pas planter le jeu plus tard.</string>
     <string name="setup_write_failed">Impossible d\'enregistrer la ROM dans le stockage de l\'application.</string>
     <string name="setup_convert_failed">La conversion a échoué. Détails ci-dessous.</string>
     <string name="touch_settings_title">Commandes tactiles</string>
@@ -46,4 +46,19 @@
     <string name="ss_resume_title">Reprendre la mission ?</string>
     <string name="ss_resume">Reprendre</string>
     <string name="ss_resume_no">Non merci</string>
+    <string name="region_ntsc">GoldenEye 007 (USA)</string>
+    <string name="region_pal">GoldenEye 007 (Europe)</string>
+    <string name="region_jpn">GoldenEye 007 (Japon)</string>
+    <string name="setup_play_region">Jouer à %1$s</string>
+    <string name="setup_region_missing">Cette application a été compilée sans la région de cette ROM.</string>
+    <string name="licences_title">Licences</string>
+    <string name="licences_close">Fermer</string>
+    <string name="opt_app">Application</string>
+    <string name="opt_rom">ROM : %1$s</string>
+    <string name="opt_change_rom">Changer de ROM…</string>
+    <string name="opt_change_rom_confirm">Le jeu redémarre pour choisir ou changer de ROM. Une mission en cours est conservée dans la sauvegarde automatique.</string>
+    <string name="opt_restart">Redémarrer</string>
+    <string name="opt_cancel">Annuler</string>
+    <string name="touch_with_pads">Garder le tactile avec des manettes (le tactile est le joueur 1)</string>
+    <string name="touch_with_pads_note">Désactivé : une manette branchée masque les commandes tactiles et devient le joueur 1. Activé : pour l\'écran partagé avec des manettes, le tactile reste le joueur 1 et les manettes sont les joueurs 2 à 4.</string>
 </resources>

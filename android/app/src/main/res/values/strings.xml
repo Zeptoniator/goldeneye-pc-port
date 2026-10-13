@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">GoldenEye 007</string>
-    <string name="setup_intro">This app contains no game data. Pick your own GoldenEye 007 ROM (USA, .z64, .v64 or .n64): it is checked, copied into the app and converted once on this device (a few seconds).</string>
+    <string name="setup_intro">This app contains no game data. Pick your own GoldenEye 007 ROM (USA, Europe or Japan; .z64, .v64 or .n64): it is checked, copied into the app and converted once on this device (a few seconds).</string>
     <string name="setup_pick">Choose the ROM…</string>
     <string name="setup_checking">Checking the ROM…</string>
     <string name="setup_preparing">Preparing the game data…</string>
@@ -10,7 +10,7 @@
     <string name="setup_step_setups">Converting level setups…</string>
     <string name="setup_read_failed">The file could not be read.</string>
     <string name="setup_not_rom">This file is not an N64 ROM.</string>
-    <string name="setup_wrong_rom">This is not the supported ROM: this build needs GoldenEye 007 (USA). Its SHA-1 is checked so that a bad or different dump cannot crash the game later.</string>
+    <string name="setup_wrong_rom">This is not a supported ROM: the app needs GoldenEye 007 (USA, Europe or Japan). Its SHA-1 is checked so that a bad or different dump cannot crash the game later.</string>
     <string name="setup_write_failed">The ROM could not be saved in the app\'s storage.</string>
     <string name="setup_convert_failed">The conversion failed. Details below.</string>
     <string name="touch_settings_title">Touch controls</string>
@@ -47,4 +47,19 @@
     <string name="ss_resume_title">Resume the mission?</string>
     <string name="ss_resume">Resume</string>
     <string name="ss_resume_no">No thanks</string>
+    <string name="region_ntsc">GoldenEye 007 (USA)</string>
+    <string name="region_pal">GoldenEye 007 (Europe)</string>
+    <string name="region_jpn">GoldenEye 007 (Japan)</string>
+    <string name="setup_play_region">Play %1$s</string>
+    <string name="setup_region_missing">This app was built without this ROM\'s region.</string>
+    <string name="licences_title">Licences</string>
+    <string name="licences_close">Close</string>
+    <string name="opt_app">App</string>
+    <string name="opt_rom">ROM: %1$s</string>
+    <string name="opt_change_rom">Change ROM…</string>
+    <string name="opt_change_rom_confirm">The game restarts to pick or switch the ROM. A mission in progress is kept in the automatic save.</string>
+    <string name="opt_restart">Restart</string>
+    <string name="opt_cancel">Cancel</string>
+    <string name="touch_with_pads">Keep touch with controllers (touch is player 1)</string>
+    <string name="touch_with_pads_note">Off: a connected controller hides the touch controls and takes player 1. On: for split-screen with controllers, touch stays player 1 and controllers are players 2 to 4.</string>
 </resources>

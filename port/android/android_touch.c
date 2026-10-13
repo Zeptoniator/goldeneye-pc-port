@@ -21,6 +21,9 @@
 #include <android/log.h>
 
 #include "android_touch.h"
+#include "system.h"   /* sysArgGetString */
+
+#include <stdlib.h>
 
 int inputTouchContext(void); /* port/src/input.c */
 
@@ -30,6 +33,15 @@ static SDL_Joystick *s_joy;
 static SDL_atomic_t s_wanted = { 1 };   /* Java: hidden while a real pad is connected */
 static SDL_SpinLock s_lookLock;
 static double s_lookDX, s_lookDY;
+
+/* F10 options overlay: the finger as an absolute pointer in window pixels
+ * (optionsoverlay.c reads it in place of SDL_GetMouseState). A press stays
+ * visible for at least one read, so a tap shorter than a poll still clicks. */
+static SDL_SpinLock s_ptrLock;
+static int s_ptrX, s_ptrY, s_ptrDown, s_ptrPressUnread;
+
+void optionsOverlayScroll(int dir);   /* port/src/optionsoverlay.c */
+static void attachTestPads(void);
 
 static int SDLCALL touchRumble(void *userdata, Uint16 lo, Uint16 hi)
 {
@@ -76,6 +88,38 @@ void androidTouchAttach(void)
     }
     s_joy = SDL_JoystickOpen(index);
     __android_log_print(ANDROID_LOG_INFO, "ge007", "touch: virtual pad attached (device %d)", index);
+    attachTestPads();
+}
+
+/* --test-pads N (testing split-screen without hardware): N idle virtual
+ * controllers, seated after the on-screen pad like real ones. */
+static void attachTestPads(void)
+{
+    static int done;
+    const char *n = sysArgGetString("--test-pads");
+    if (done || !n) {
+        return;
+    }
+    done = 1;
+    for (int i = 0; i < atoi(n) && i < 3; i++) {
+        SDL_VirtualJoystickDesc d;
+        SDL_zero(d);
+        d.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+        d.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+        d.naxes = SDL_CONTROLLER_AXIS_MAX;
+        d.nbuttons = TOUCH_NBUTTONS;
+        d.button_mask = (1u << TOUCH_NBUTTONS) - 1u;
+        d.axis_mask = (1u << SDL_CONTROLLER_AXIS_MAX) - 1u;
+        d.name = "Test pad";
+        if (SDL_JoystickAttachVirtualEx(&d) >= 0) {
+            __android_log_print(ANDROID_LOG_INFO, "ge007", "touch: test pad %d attached", i + 1);
+        }
+    }
+}
+
+int androidTouchIsPad(SDL_JoystickID inst)
+{
+    return s_joy && inst >= 0 && SDL_JoystickInstanceID(s_joy) == inst;
 }
 
 void androidTouchDetach(void)
@@ -143,6 +187,42 @@ Java_io_github_zeptoniator_ge007_TouchOverlay_nativeLook(JNIEnv *env, jclass cls
     s_lookDX += dx;
     s_lookDY += dy;
     SDL_AtomicUnlock(&s_lookLock);
+}
+
+int androidTouchPointer(int *x, int *y)
+{
+    SDL_AtomicLock(&s_ptrLock);
+    *x = s_ptrX;
+    *y = s_ptrY;
+    int down = s_ptrDown || s_ptrPressUnread;
+    s_ptrPressUnread = 0;
+    SDL_AtomicUnlock(&s_ptrLock);
+    return down;
+}
+
+/* action: 0 move, 1 press, 2 release. */
+JNIEXPORT void JNICALL
+Java_io_github_zeptoniator_ge007_TouchOverlay_nativePointer(JNIEnv *env, jclass cls, jint x, jint y, jint action)
+{
+    (void)env; (void)cls;
+    SDL_AtomicLock(&s_ptrLock);
+    s_ptrX = x;
+    s_ptrY = y;
+    if (action == 1) {
+        s_ptrDown = 1;
+        s_ptrPressUnread = 1;
+    } else if (action == 2) {
+        s_ptrDown = 0;
+    }
+    SDL_AtomicUnlock(&s_ptrLock);
+}
+
+/* A vertical swipe on the panel: list steps (wheel notches, < 0 = up). */
+JNIEXPORT void JNICALL
+Java_io_github_zeptoniator_ge007_TouchOverlay_nativeOptionsScroll(JNIEnv *env, jclass cls, jint steps)
+{
+    (void)env; (void)cls;
+    optionsOverlayScroll(steps);
 }
 
 JNIEXPORT void JNICALL

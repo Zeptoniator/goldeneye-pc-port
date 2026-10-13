@@ -1,6 +1,21 @@
 plugins {
     id 'com.android.application' version '9.4.1' apply false
+    id 'com.android.library' version '9.4.1' apply false
     // Embedded Python, used once: the PC port's own asset converters run on
     // the device against the ROM the player picks (SetupActivity).
     id 'com.chaquo.python' version '17.1.0' apply false
 }
+
+// The SDL2 2.x source tree: its Java glue (SDLActivity & co.) is compiled
+// into the app and its C side is built by the top-level CMakeLists.txt.
+// -Pge.sdl2Dir=..., GE_SDL2_SOURCE_DIR, ge.sdl2Dir in local.properties, or
+// scripts/android/fetch-sdl2.sh's default location (android/third_party/SDL2,
+// git-ignored).
+def localProps = new Properties()
+def localPropsFile = file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+ext.geSdl2Dir = providers.gradleProperty('ge.sdl2Dir')
+        .orElse(providers.environmentVariable('GE_SDL2_SOURCE_DIR'))
+        .getOrElse(localProps.getProperty('ge.sdl2Dir', "${projectDir}/third_party/SDL2"))

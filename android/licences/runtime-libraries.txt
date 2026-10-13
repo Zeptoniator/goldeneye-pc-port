@@ -1,0 +1,60 @@
+Native libraries of the embedded Python runtime (Chaquopy's build of
+CPython 3.13) that are not part of CPython's own source. OpenSSL, zlib,
+expat, libffi and libmpdec are covered in the CPython section above.
+
+bzip2 / libbzip2 (the _bz2 module)
+----------------------------------
+This program, "bzip2", the associated library "libbzip2", and all
+documentation, are copyright (C) 1996-2010 Julian R Seward. All rights
+reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. The origin of this software must not be misrepresented; you must
+   not claim that you wrote the original software. If you use this
+   software in a product, an acknowledgment in the product
+   documentation would be appreciated but is not required.
+
+3. Altered source versions must be plainly marked as such, and must
+   not be misrepresented as being the original software.
+
+4. The name of the author may not be used to endorse or promote
+   products derived from this software without specific prior written
+   permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+XZ Utils / liblzma (the _lzma module)
+-------------------------------------
+liblzma is distributed under the BSD Zero Clause License (0BSD); older
+releases were in the public domain.
+
+SQLite (the _sqlite3 module)
+----------------------------
+The SQLite source code is in the public domain.
+
+Mozilla CA certificate store (cacert.pem)
+-----------------------------------------
+Shipped by Chaquopy for the ssl module; Mozilla Public License 2.0,
+source and license at https://www.mozilla.org/MPL/2.0/ and
+https://curl.se/docs/caextract.html. Not used by this app.
+
+Kotlin standard library
+-----------------------
+Copyright JetBrains s.r.o. and Kotlin Programming Language contributors.
+Apache License 2.0 (the full text is in the OpenSSL section above).

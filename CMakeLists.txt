@@ -1015,11 +1015,19 @@ endif()
 if(ANDROID)
   # SDLActivity loads "libmain.so" and calls SDL_main (main.c's main(),
   # renamed by SDL_main.h). The JNI bridge for the touch overlay and the data
-  # path lives in port/android/.
+  # path lives in port/android/. One library per region in the same APK:
+  # libmain.so (US), libmain_pal.so, libmain_jpn.so (android/region-*);
+  # GoldenEyeActivity loads the one matching the imported ROM.
   file(GLOB SRC_ANDROID CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/port/android/*.c")
   add_library(ge007 SHARED ${SRC} ${SRC_ANDROID})
   target_link_libraries(ge007 ${LIBS})
-  set_target_properties(ge007 PROPERTIES OUTPUT_NAME "main"
+  if(ROMID STREQUAL "ntsc-final")
+    set(_GE_ANDROID_LIB "main")
+  else()
+    string(REPLACE "-final" "" _GE_REGION_SHORT "${ROMID}")
+    set(_GE_ANDROID_LIB "main_${_GE_REGION_SHORT}")
+  endif()
+  set_target_properties(ge007 PROPERTIES OUTPUT_NAME "${_GE_ANDROID_LIB}"
     LINK_DEPENDS "${CMAKE_SOURCE_DIR}/port/android/libmain.map")
   # libc++ (unlike libstdc++) reaches the C headers with a plain #include
   # from <cmath>/<cstddef>/..., so the decomp's own <math.h>/<stdlib.h> and

@@ -1,5 +1,6 @@
 package io.github.zeptoniator.ge007;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.input.InputManager;
@@ -120,7 +121,7 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
         if (overlay != null) {
             if (SaveStates.nativeCanSave()) {
                 SaveStates.saveAndWait(this, SaveStates.AUTO, 2500);
-            } else if (!SaveStates.nativeBusy()) {
+            } else if (!SaveStates.nativeBusy() && !restarting) {
                 // Not in a mission (front end): nothing to resume later.
                 //noinspection ResultOfMethodCallIgnored
                 SaveStates.file(this, SaveStates.AUTO).delete();
@@ -153,13 +154,39 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
         super.onDestroy();
     }
 
-    @Override
-    protected String[] getLibraries() {
-        return new String[] { "SDL2", "main" };
+    /**
+     * Options panel, "Change ROM": the game cannot be unloaded from this
+     * process, so restart the app into SetupActivity (pick a ROM or switch
+     * region), keeping a mission in progress in the automatic save.
+     */
+    private boolean restarting;
+
+    void changeRom() {
+        new AlertDialog.Builder(this)
+                .setMessage(R.string.opt_change_rom_confirm)
+                .setNegativeButton(R.string.opt_cancel, null)
+                .setPositiveButton(R.string.opt_restart, (d, w) -> {
+                    restarting = true;   // onPause must not drop the automatic save
+                    if (SaveStates.nativeCanSave()) {
+                        SaveStates.saveAndWait(this, SaveStates.AUTO, 2500);
+                    }
+                    Intent i = new Intent(this, SetupActivity.class)
+                            .putExtra(SetupActivity.EXTRA_CHANGE_ROM, true)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                    Runtime.getRuntime().exit(0);
+                })
+                .show();
     }
 
-    /** port/android/loader/ge_fixedload.c: libmain.so's base, 0 on failure. */
-    private static native long nativeLoadMainFixed();
+    /** The imported ROM's game: libmain.so (US), libmain_pal.so, libmain_jpn.so. */
+    @Override
+    protected String[] getLibraries() {
+        return new String[] { "SDL2", Regions.library(Regions.active(this)) };
+    }
+
+    /** port/android/loader/ge_fixedload.c: the library's base, 0 on failure. */
+    private static native long nativeLoadMainFixed(String soname);
 
     /**
      * libmain.so at the same address in every process, so that savestates
@@ -168,16 +195,17 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
      */
     @Override
     public void loadLibraries() {
+        String main = getLibraries()[1];
         SDL.loadLibrary("SDL2", this);
         try {
             System.loadLibrary("geload");
-            if (nativeLoadMainFixed() == 0) {
-                Log.w("ge007", "libmain.so: normal load (savestates from other runs are relocated)");
+            if (nativeLoadMainFixed("lib" + main + ".so") == 0) {
+                Log.w("ge007", "lib" + main + ".so: normal load (savestates from other runs are relocated)");
             }
         } catch (UnsatisfiedLinkError e) {
             Log.w("ge007", "libgeload.so: " + e.getMessage());
         }
-        SDL.loadLibrary("main", this);
+        SDL.loadLibrary(main, this);
     }
 
     @Override
@@ -221,7 +249,12 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
                 || (s & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
     }
 
-    private void updateOverlayForControllers() {
+    /**
+     * A real controller hides the on-screen controls (it takes player 1),
+     * unless the touch settings keep them: then touch stays player 1 and the
+     * controllers are players 2-4 (port/src/input.c, mpRoute).
+     */
+    void updateOverlayForControllers() {
         boolean pad = false;
         for (int id : InputDevice.getDeviceIds()) {
             if (isGameController(InputDevice.getDevice(id))) {
@@ -230,7 +263,7 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
             }
         }
         if (overlay != null) {
-            overlay.setActive(!pad);
+            overlay.setActive(!pad || overlay.keptWithControllers());
         }
     }
 

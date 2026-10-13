@@ -1,0 +1,44 @@
+// The game built for one more ROM region, as a library module whose AAR
+// brings libmain_<region>.so into the app (android/region-*/build.gradle set
+// ext.geRomId first). Same CMake project and arguments as the app's own
+// libmain.so (US); only ROMID differs. GoldenEyeActivity picks the library
+// matching the imported ROM.
+apply plugin: 'com.android.library'
+
+android {
+    namespace "io.github.zeptoniator.ge007.${geRomId.replace('-final', '')}"
+    compileSdk 37
+    ndkVersion '28.2.13676358'
+
+    defaultConfig {
+        minSdk 26
+        externalNativeBuild {
+            cmake {
+                arguments "-DGE_SDL2_SOURCE_DIR=${rootProject.ext.geSdl2Dir}",
+                          "-DROMID=${geRomId}",
+                          '-DANDROID_STL=c++_static'
+                targets 'ge007'
+            }
+        }
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        debug {
+            externalNativeBuild { cmake { arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo' } }
+        }
+        release {
+            minifyEnabled false
+            externalNativeBuild { cmake { arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo' } }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('../../CMakeLists.txt')
+            version '3.31.6'
+        }
+    }
+}
