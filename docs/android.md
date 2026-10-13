@@ -45,7 +45,9 @@ The APK carries no game data. It carries the game once per ROM region:
 modules: same CMake project, another `ROMID`; `android/region-lib.gradle`).
 `-Pge.regions=ntsc-final` builds the US one only, for quicker iterations.
 PAL and JP are at the PC port's own level for those regions (they convert,
-build and boot; ROADMAP §1 owes their full runtime passes).
+build and boot; ROADMAP §1 owes their full runtime passes). 2026-10-13, PAL
+on Linux (same game code as `libmain_pal.so`): each of the 21 solo levels
+booted with `-level_NN` and ran 40 s headless without a crash.
 
 ## First run
 
@@ -121,10 +123,17 @@ horizontal swipe drags a slider. Touch is fed as an absolute pointer
 `SDL_GetMouseState`); a press is held for at least one poll so a short tap
 still clicks.
 
-**Touch settings** (gear): look sensitivity, vertical look, invert vertical,
-button opacity and size, vibration on press, **move buttons** (drag any
-button of either set; Reset / Done), keep touch with controllers, defaults.
-Stored in the app's `touch` preferences.
+**Options panel** (gear), drawn over the running game: a rail of three
+sections on the left (Game, Controls, App) with **Resume** at its foot under
+the left thumb, the chosen section on the right. Game: the cheats and game
+options below. Controls: look sensitivity, vertical look, invert vertical,
+button opacity and size, vibration on press, keep touch with controllers,
+**move buttons** (drag any button of either set; Reset / Done), defaults.
+App: the ROM in use, Change ROM, Licences. It reopens on the last section
+used. Touch settings live in the app's `touch` preferences. The look,
+"Opening Titles" (`Titles.java`, `android/DESIGN.md`): near-black, ivory
+text, gold only for what is on or active, Michroma (OFL) for the section
+titles; switching section replays the title like an opening credit.
 
 The N64 Rumble Pak drives the phone's vibrator.
 
@@ -143,7 +152,10 @@ one controller (it used to count as two: keyboard/mouse plus the pad).
 The disk button opens **Saves**: three slots plus an **automatic** one.
 Saving works during a solo mission, loading anywhere (front end included).
 The automatic slot is written every 45 s of a mission and when the app
-leaves the screen; at the next launch the game offers to **resume** it (Android may close a background app
+leaves the screen; at the next launch the game offers to **resume** it. It
+is dropped only when the app leaves the screen in the front end after a
+solo mission ran in that session (that mission is over); opening the app
+and leaving again keeps it (Android may close a background app
 at any time, which used to restart the game from the intro). Files:
 `data/states/{auto,slot1..3}.ge7s` (~0.8 MB each). The Bond file saves
 (EEPROM) stay the reference: after a load they are re-read from disk, so an

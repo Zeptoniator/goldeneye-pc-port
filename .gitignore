@@ -216,4 +216,8 @@ docs/media/*.mp4
 /android/app/.cxx/
 /android/region-*/build/
 /android/region-*/.cxx/
+# Impeccable design runs: review captures are game frames, mocks are throwaway
+/android/.impeccable/review/
+/android/.impeccable/mocks/
+/android/.impeccable/questions/
 /android/third_party/

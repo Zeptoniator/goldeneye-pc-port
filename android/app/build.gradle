@@ -132,6 +132,7 @@ def licenceParts = [
     ['Software incorporated in Python (OpenSSL, expat, libffi, zlib, libmpdec, ...)',
      "${rootDir}/licences/python-incorporated.rst"],
     ['Chaquopy (embedded Python) - MIT License', "${rootDir}/licences/chaquopy-LICENSE.txt"],
+    ['Michroma typeface (panel titles) - SIL Open Font License 1.1', "${rootDir}/licences/michroma-OFL.txt"],
     ['Other libraries in the Python runtime', "${rootDir}/licences/runtime-libraries.txt"],
 ]
 def licencesAsset = tasks.register('ge007Licences') {

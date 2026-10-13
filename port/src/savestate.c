@@ -65,6 +65,8 @@ extern void lvlSetSelectedDifficulty(int difficulty);
 extern void set_selected_difficulty(int difficulty);
 extern void set_solo_and_ptr_briefing(int stage);
 extern void fileValidateSaves(void);
+extern s32 get_is_ramrom_flag(void);           /* src/game/ramromreplay.c: demo playback */
+extern s32 get_recording_ramrom_flag(void);
 
 /* Port. */
 extern void videoResetTextureCache(void);
@@ -271,6 +273,12 @@ typedef struct SaveJob {
 
 static int canSaveNow(void)
 {
+    /* Not during the title screen's demos (ramrom replay of a recorded
+     * mission): they run a solo stage with a player, and a periodic save
+     * there once replaced the player's own resume state with Dam's demo. */
+    if (get_is_ramrom_flag() || get_recording_ramrom_flag()) {
+        return 0;
+    }
     return g_StageNum != LEVELID_TITLE && g_StageNum > 0 && g_StageNum < LEVELID_SOLO_MAX &&
            g_MainStageNum < 0 && g_CurrentPlayer != NULL && getPlayerCount() == 1 &&
            (current_menu == MENU_RUN_STAGE || current_menu == MENU_INVALID);

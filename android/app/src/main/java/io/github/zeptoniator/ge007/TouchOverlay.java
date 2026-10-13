@@ -128,6 +128,8 @@ public class TouchOverlay extends View {
     }
 
     private final List<Button> buttons = new ArrayList<>();
+    private final Button leftFireButton;
+    private boolean leftFire;         // touch settings: show leftFireButton
     private final float dp;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -156,6 +158,9 @@ public class TouchOverlay extends View {
         public void run() {
             int n = nativeContext();
             int c = n == 1 ? IN_GAME : n == 3 ? IN_OPTIONS : IN_MENU;
+            if (!SaveStates.soloMissionSeen && SaveStates.nativeCanSave()) {
+                SaveStates.soloMissionSeen = true;
+            }
             if (c != context && !editMode) {
                 releaseAll();   // nothing stays held across a set change
                 context = c;
@@ -206,6 +211,10 @@ public class TouchOverlay extends View {
         // right edge, y as a fraction of the height). The ammo counter the
         // game draws bottom right stays clear.
         buttons.add(new Button("FIRE", "FIRE", IC_BULLET, IN_GAME, -1, AXIS_TRIGGERRIGHT, false, true, red, 96, 0.70f, 50));
+        // Optional second FIRE for the left thumb (touch settings), above the
+        // stick's zone; it does not look (the left thumb moves).
+        leftFireButton = new Button("FIRE_L", "FIRE", IC_BULLET, IN_GAME, -1, AXIS_TRIGGERRIGHT, false, false, red, -150, 0.38f, 38);
+        buttons.add(leftFireButton);
         buttons.add(new Button("AIM", "AIM", IC_AIM, IN_GAME, -1, AXIS_TRIGGERLEFT, true, false, amber, 205, 0.80f, 33));
         buttons.add(new Button("USE", "USE", IC_HAND, IN_GAME, BTN_A, -1, false, false, white, 196, 0.53f, 31));
         buttons.add(new Button("RELOAD", "RELOAD", IC_RELOAD, IN_GAME, BTN_X, -1, false, false, white, 126, 0.37f, 27));
@@ -262,6 +271,9 @@ public class TouchOverlay extends View {
     }
 
     private boolean shown(Button b) {
+        if (b == leftFireButton && !leftFire) {
+            return false;
+        }
         return editMode || (b.sets & context) != 0;
     }
 
@@ -280,6 +292,7 @@ public class TouchOverlay extends View {
         opacity = p.getInt("opacity", 100) / 100f;
         sizeScale = p.getInt("size", 100) / 100f;
         haptics = p.getBoolean("haptics", true);
+        leftFire = p.getBoolean("leftFire", false);
         for (Button b : buttons) {
             b.userX = p.getFloat("x." + b.key, -1f);
             b.userY = p.getFloat("y." + b.key, -1f);
@@ -601,10 +614,15 @@ public class TouchOverlay extends View {
         }
         b.down = down;
         if (b.axis >= 0) {
+            // Two FIRE buttons share the trigger: it is pulled while either is.
+            boolean pulled = false;
+            for (Button o : buttons) {
+                pulled |= o.axis == b.axis && o.down;
+            }
             // SDL triggers span the whole axis: released is the minimum, not
             // 0 (0 reads as a half-pulled trigger, past the port's 25 % fire
             // threshold: the gun kept firing after FIRE was let go).
-            nativeAxis(b.axis, down ? 32767 : -32768);
+            nativeAxis(b.axis, pulled ? 32767 : -32768);
         } else {
             nativeButton(b.button, down);
         }

@@ -37,7 +37,10 @@ that are not vendored in this repository and keep their own licenses: SDL2
 embedded Python runtime from Chaquopy (MIT): CPython 3.13 (PSF License) with
 the software it incorporates (OpenSSL under Apache-2.0, zlib, expat, libffi,
 libmpdec, ...) and bzip2, liblzma, SQLite. Their license texts are in
-android/licences/ and shown in the app (Licences).
+android/licences/ and shown in the app (Licences). The app's panel titles
+use the Michroma typeface (android/app/src/main/assets/fonts/, SIL Open
+Font License 1.1, (c) The Michroma Project Authors; license text in
+android/licences/michroma-OFL.txt).
 
 It does NOT cover:
 

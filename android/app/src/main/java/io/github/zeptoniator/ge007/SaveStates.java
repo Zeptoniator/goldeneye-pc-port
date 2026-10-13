@@ -19,6 +19,13 @@ import java.util.Date;
 final class SaveStates {
     static final int AUTO = 0, SLOTS = 4;
 
+    /**
+     * A solo mission (one that could be saved) ran in this process. Only
+     * then does leaving from the front end drop the automatic state: the
+     * mission it held is over. Opening the app and leaving again keeps it.
+     */
+    static volatile boolean soloMissionSeen;
+
     static native void nativeSave(String path);
     static native void nativeSaveLong(String path);
     /** Periodic automatic save to path during missions (0 s = off). */

@@ -121,8 +121,8 @@ public class GoldenEyeActivity extends SDLActivity implements InputManager.Input
         if (overlay != null) {
             if (SaveStates.nativeCanSave()) {
                 SaveStates.saveAndWait(this, SaveStates.AUTO, 2500);
-            } else if (!SaveStates.nativeBusy() && !restarting) {
-                // Not in a mission (front end): nothing to resume later.
+            } else if (!SaveStates.nativeBusy() && !restarting && SaveStates.soloMissionSeen) {
+                // Back in the front end after a mission: nothing to resume.
                 //noinspection ResultOfMethodCallIgnored
                 SaveStates.file(this, SaveStates.AUTO).delete();
             }

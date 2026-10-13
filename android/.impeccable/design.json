@@ -1,0 +1,311 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T19:30:00+02:00",
+  "title": "Design System: GoldenEye 007 (Android)",
+  "extensions": {
+    "colorMeta": {
+      "titles-black": {
+        "role": "neutral",
+        "displayName": "Titles Black",
+        "canonical": "oklch(13.0% 0.007 285)",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#232428",
+          "#3f3f44",
+          "#5d5d62",
+          "#808084",
+          "#a4a4a9",
+          "#cacacf",
+          "#eeeef3"
+        ]
+      },
+      "ivory": {
+        "role": "neutral",
+        "displayName": "Ivory",
+        "canonical": "oklch(92.7% 0.040 88)",
+        "tonalRamp": [
+          "#120a00",
+          "#2c230b",
+          "#493f26",
+          "#675d43",
+          "#8a7f65",
+          "#afa488",
+          "#d5caad",
+          "#faeed0"
+        ]
+      },
+      "credit-grey": {
+        "role": "neutral",
+        "displayName": "Credit Grey",
+        "canonical": "oklch(60.6% 0.027 83)",
+        "tonalRamp": [
+          "#110a01",
+          "#2a2315",
+          "#473f2f",
+          "#655d4c",
+          "#887f6e",
+          "#ada392",
+          "#d3c9b7",
+          "#f7edda"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(27.1% 0.012 78)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#27231d",
+          "#433f39",
+          "#615d56",
+          "#847f78",
+          "#a9a49c",
+          "#cfcac2",
+          "#f3eee6"
+        ]
+      },
+      "molten-gold": {
+        "role": "primary",
+        "displayName": "Molten Gold",
+        "canonical": "oklch(75.1% 0.130 80)",
+        "tonalRamp": [
+          "#1b0400",
+          "#3a1c00",
+          "#5b3700",
+          "#7f5400",
+          "#a87600",
+          "#cb9c48",
+          "#edc37c",
+          "#ffe9ab"
+        ]
+      },
+      "confirm-red": {
+        "role": "secondary",
+        "displayName": "Confirm Red",
+        "canonical": "oklch(41.9% 0.149 29)",
+        "tonalRamp": [
+          "#230000",
+          "#460b06",
+          "#6c251d",
+          "#944035",
+          "#c15e51",
+          "#e4887a",
+          "#ffb2a4",
+          "#ffd9cc"
+        ]
+      },
+      "pressed": {
+        "role": "neutral",
+        "displayName": "Pressed",
+        "canonical": "oklch(19.2% 0.010 89)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241e",
+          "#42403a",
+          "#605d57",
+          "#838079",
+          "#a7a49d",
+          "#cdcac3",
+          "#f1eee7"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Scrim",
+        "canonical": "#07070a9e",
+        "tonalRamp": [
+          "#07070a9e"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Credit Title",
+        "purpose": "Section or panel title, Michroma 30 sp tracked 0.42, fitted to one line; replays as a credit."
+      },
+      "title": {
+        "displayName": "Rail Credit",
+        "purpose": "The three rail credits, one shared fitted size."
+      },
+      "label-credit": {
+        "displayName": "Primary Action",
+        "purpose": "The primary button label only (Resume)."
+      },
+      "body": {
+        "displayName": "Row Label",
+        "purpose": "Row labels and slot names, system sans, tabular figures."
+      },
+      "value": {
+        "displayName": "Value",
+        "purpose": "Slider values (gold) and read-only values (ivory), with their unit."
+      },
+      "button": {
+        "displayName": "Secondary Button",
+        "purpose": "Secondary button labels, sentence case."
+      },
+      "subtitle": {
+        "displayName": "Subtitle",
+        "purpose": "The one line under the title, tracked capitals, grey."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Explanatory notes under rows, grey."
+      },
+      "status": {
+        "displayName": "Status",
+        "purpose": "The Saves rail's status line, grey."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "panel-open",
+        "value": "alpha 0 to 1 and top rule scaleX 0 to 1 from the left, 220ms, DecelerateInterpolator(2)",
+        "purpose": "Opening a panel, as a title sequence opens."
+      },
+      {
+        "name": "credit-in",
+        "value": "alpha 0 to 1, letter-spacing set+0.5em to set, glyphs condensed (textScaleX) while wider than the line, 220ms, DecelerateInterpolator(2)",
+        "purpose": "Signature: a title replays as an opening credit on section change and on Saves opening."
+      },
+      {
+        "name": "list-crossfade",
+        "value": "alpha 0 to 1, 160ms",
+        "purpose": "The new section's list under the replayed title."
+      },
+      {
+        "name": "switch-toggle",
+        "value": "thumb slide and gold fill crossfade, 150ms, DecelerateInterpolator(2)",
+        "purpose": "Square switch state change."
+      },
+      {
+        "name": "confirm-window",
+        "value": "3000ms",
+        "purpose": "How long a destructive button stays armed in red."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "instant when ValueAnimator.areAnimatorsEnabled() is false",
+        "purpose": "Every transition has an instant path."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone-landscape",
+        "value": "landscape only; panel inset 88dp sides, 16dp top and bottom"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Resume, one per panel, at the foot of the rail.",
+      "html": "<button class=\"ds-btn-primary\">Reprendre</button>",
+      "css": ".ds-btn-primary{background:transparent;color:#d9a441;border:1px solid #d9a441;border-radius:0;height:48px;padding:0 16px;font-family: Michroma, sans-serif; text-transform: uppercase;font-size:10px;letter-spacing:0.28em;min-width:200px}.ds-btn-primary:hover,.ds-btn-primary:focus-visible{background:#16140f;outline:none}.ds-btn-primary:active{background:#d9a441;color:#07070a}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action: grey outline, ivory sans label.",
+      "html": "<button class=\"ds-btn-secondary\">Déplacer les boutons</button> <button class=\"ds-btn-secondary\" disabled>Sauver</button>",
+      "css": ".ds-btn-secondary{background:transparent;color:#f2e6c9;border:1px solid #8a8170;border-radius:0;height:48px;padding:0 16px;font-family:sans-serif;font-weight:500;font-size:14px}.ds-btn-secondary:hover,.ds-btn-secondary:active{background:#16140f}.ds-btn-secondary:focus-visible{background:#16140f;border-color:#d9a441;outline:none}.ds-btn-secondary:disabled{border-color:#2a2620;color:#8a8170;background:transparent}"
+    },
+    {
+      "name": "Armed Destructive Button",
+      "kind": "button",
+      "refersTo": "button-confirm-armed",
+      "description": "Defaults after its first tap: solid red for 3 s, a second tap acts.",
+      "html": "<button class=\"ds-btn-armed\">Confirmer ?</button>",
+      "css": ".ds-btn-armed{background:#8c1c13;color:#f2e6c9;border:1px solid #8c1c13;border-radius:0;height:48px;padding:0 16px;font-family:sans-serif;font-weight:500;font-size:14px}.ds-btn-armed:focus-visible{outline:1px solid #f2e6c9}"
+    },
+    {
+      "name": "Rail Credits",
+      "kind": "nav",
+      "refersTo": "rail-credit",
+      "description": "Three section credits; the active one ivory behind a 16 dp gold rule.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-credit\" href=\"#\">Jeu</a><a class=\"ds-credit ds-on\" href=\"#\">Commandes</a><a class=\"ds-credit\" href=\"#\">Application</a></nav>",
+      "css": ".ds-rail{display:flex;flex-direction:column;width:216px;background:#07070a;padding:24px 0 16px}.ds-credit{display:flex;align-items:center;height:48px;padding:0 16px 0 24px;color:#8a8170;text-decoration:none;font-family: Michroma, sans-serif; text-transform: uppercase;font-size:11px;letter-spacing:0.32em}.ds-credit:hover,.ds-credit:focus-visible{background:#16140f;outline:none}.ds-credit.ds-on{color:#f2e6c9}.ds-credit.ds-on::before{content:'';width:16px;height:2px;background:#d9a441;margin-right:12px}"
+    },
+    {
+      "name": "Square Switch Row",
+      "kind": "custom",
+      "refersTo": "switch-on",
+      "description": "Settings row with the 44 x 24 dp square switch; the whole row toggles.",
+      "html": "<label class=\"ds-row\"><span>Invincibilité</span><input type=\"checkbox\" class=\"ds-switch\" role=\"switch\" checked></label><label class=\"ds-row\"><span>Munitions infinies</span><input type=\"checkbox\" class=\"ds-switch\" role=\"switch\"></label>",
+      "css": ".ds-row{display:flex;align-items:center;justify-content:space-between;min-height:48px;background:#07070a;color:#f2e6c9;font-family:sans-serif;font-size:15px;border-bottom:1px solid #2a2620;font-variant-numeric:tabular-nums}.ds-row:active{background:#16140f}.ds-switch{appearance:none;width:44px;height:24px;margin:0;border:1px solid #8a8170;border-radius:0;position:relative;background:transparent;transition:background .15s,border-color .15s}.ds-switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:#8a8170;transition:left .15s}.ds-switch:checked{background:#d9a441;border-color:#d9a441}.ds-switch:checked::after{left:23px;background:#07070a}.ds-switch:focus-visible{outline:1px solid #f2e6c9;outline-offset:1px}"
+    },
+    {
+      "name": "Flat Slider",
+      "kind": "input",
+      "refersTo": "slider",
+      "description": "2 dp track, gold to the value, 16 dp square thumb; value in gold with its unit.",
+      "html": "<div class=\"ds-slider\"><div class=\"ds-sl-line\"><span>Sensibilité de la visée</span><b>64 %</b></div><input type=\"range\" min=\"25\" max=\"300\" value=\"64\"></div>",
+      "css": ".ds-slider{background:#07070a;color:#f2e6c9;font-family:sans-serif;font-size:15px;border-bottom:1px solid #2a2620}.ds-sl-line{display:flex;justify-content:space-between;min-height:32px;align-items:center}.ds-sl-line b{color:#d9a441;font-weight:500;font-variant-numeric:tabular-nums}.ds-slider input{appearance:none;width:100%;height:48px;background:transparent;margin:0}.ds-slider input::-webkit-slider-runnable-track{height:2px;background:#2a2620}.ds-slider input::-webkit-slider-thumb{appearance:none;width:16px;height:16px;margin-top:-7px;background:#f2e6c9;border-radius:0}.ds-slider input:active::-webkit-slider-thumb{background:#d9a441}.ds-slider input:focus-visible{outline:1px solid #d9a441}"
+    },
+    {
+      "name": "Credit Title Header",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "The panel body head: Michroma title tracked 0.42 over a grey tracked subtitle, under the gold top rule.",
+      "html": "<section class=\"ds-panel\"><h1 class=\"ds-title\">Commandes</h1><p class=\"ds-sub\">Visée, boutons, vibration</p></section>",
+      "css": ".ds-panel{background:#07070a;border-top:2px solid #d9a441;padding:24px 32px}.ds-title{margin:0;min-height:40px;color:#f2e6c9;font-family: Michroma, sans-serif; text-transform: uppercase;font-weight:400;font-size:30px;letter-spacing:0.42em;white-space:nowrap;animation:ds-credit .22s cubic-bezier(0,0,.2,1)}.ds-sub{margin:0;min-height:24px;color:#8a8170;font-family:sans-serif;font-size:12px;letter-spacing:0.2em;text-transform:uppercase}@keyframes ds-credit{from{opacity:0;letter-spacing:0.92em}to{opacity:1;letter-spacing:0.42em}}@media (prefers-reduced-motion:reduce){.ds-title{animation:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Opening Titles",
+    "overview": "The app's in-game panels read like a spy film's opening credits: a near-black field laid over the still-running mission, section names set as wide-tracked capital credits, and a clean list of settings beneath them. Gold is light catching the screen: it marks only what is on, what is active, and the one action that returns the player to the mission. Everything else is ivory on black or a muted credit grey.\n\nDensity is calm but quick. Every target is 48 dp, every row is a single line of plain sans text with its control at the right edge, and the panel leaves the game visible on both sides. Depth comes from black on a dimmed game, never from shadows; form is square and flat throughout. The world refuses the grey Android settings card and the neon gaming HUD.\n\nScope: this system covers the two in-game panels, Options (gear, `TouchSettingsPanel`) and Saves (`SaveStatesPanel`), built from the shared tokens in `Titles.java`. The setup screen (`SetupActivity`), the touch overlay (`TouchOverlay`) and the licences dialog (`Licences`) are not yet in this world; they keep their earlier look until they are brought over. The PC port's F10 overlay is the game's own UI and is outside this system.",
+    "keyCharacteristics": [
+      "Near-black panel over a 62 % scrim of the running game, gold 2 dp rule along its top edge.",
+      "Michroma credits (wide-tracked capitals) for section titles, rail entries and the primary action only.",
+      "System sans for everything read; values in tabular figures with their unit.",
+      "Gold reserved for on, active and the primary action; red only for a destructive action awaiting confirmation.",
+      "Square, flat, outlined controls on an 8 dp grid; 48 dp targets.",
+      "One signature motion: a title replays as a credit, its tracking closing from wide to set."
+    ],
+    "rules": [
+      {
+        "name": "The Gold Means On Rule",
+        "body": "Gold appears only on what is on, active, or the primary action (plus the panel's top rule, which opens the sequence). If gold is on something that is none of these, it is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Is a Question Rule",
+        "body": "Red appears only while a destructive action waits for its confirming tap, and reverts on its own.",
+        "section": "colors"
+      },
+      {
+        "name": "The Credits Only Rule",
+        "body": "Michroma is for credit titles, rail credits and the primary action. A label, value, note or secondary button in Michroma is wrong.",
+        "section": "typography"
+      },
+      {
+        "name": "The Steady Figures Rule",
+        "body": "Every text view the system builds sets tabular figures, so a value changing under a thumb never jitters.",
+        "section": "typography"
+      },
+      {
+        "name": "The Black Plane Rule",
+        "body": "Depth is black over dimmed game; nothing casts a shadow and nothing glows.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep the game visible: panel inset 88 dp from both sides over the 62 % scrim.",
+      "**Do** build every target at 48 dp and keep the primary action at the foot of the left rail, under the thumb.",
+      "**Do** use gold only for on, active and the primary action; one primary button per panel.",
+      "**Do** set titles in Michroma and fit them to their line; set everything read in the system sans with tabular figures.",
+      "**Do** make destructive actions take two taps, the armed state in red for 3 s.",
+      "**Do** honour the system's animation setting: every transition has an instant path."
+    ],
+    "donts": [
+      "**Don't** round anything: no pills, no rounded cards, no circular thumbs.",
+      "**Don't** add shadows, glows, gradients or grain.",
+      "**Don't** use Michroma for labels, values, notes or secondary buttons.",
+      "**Don't** use red for anything but a destructive action awaiting confirmation.",
+      "**Don't** fall back to the grey Android settings card or a neon gaming HUD."
+    ]
+  }
+}
