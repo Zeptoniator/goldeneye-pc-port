@@ -100,6 +100,7 @@ public class TouchOverlay extends View {
         final int accent;         // ring colour
         final float fx, fy, fr;   // dp from the right edge (< 0: from the left), fraction of the height, radius (dp)
         float userX = -1, userY = -1; // moved by the player: centre as fractions of the view
+        float wfx = Float.NaN, wfy;   // while the watch is open: default place, as fx / fy
         float cx, cy, r;          // px, computed in layoutControls()
         boolean down;             // current output state
         int pointer = -1;
@@ -123,8 +124,8 @@ public class TouchOverlay extends View {
         boolean hit(float x, float y) {
             float dx = x - cx, dy = y - cy;
             if (isShortcut()) {
-                // Square tile; at least the 48 dp target around it.
-                float half = Math.max(r * 1.15f, hitHalf);
+                // Square tile; at least the 48 dp target, 8 dp from its neighbour.
+                float half = hitHalf;
                 return Math.abs(dx) <= half && Math.abs(dy) <= half;
             }
             float rr = r * 1.15f; // a little slack around the drawn circle
@@ -166,6 +167,7 @@ public class TouchOverlay extends View {
     // What the game is doing: which set is shown.
     private int context = IN_MENU;
     private boolean inStage;          // in a mission (playing, or its watch open)
+    private boolean watchOpen;        // the watch / pause screen of a mission
     private final Runnable contextPoll = new Runnable() {
         @Override
         public void run() {
@@ -174,6 +176,12 @@ public class TouchOverlay extends View {
             boolean stage = n == 1 || n == 2;
             if (stage != inStage) {
                 inStage = stage;
+                invalidate();
+            }
+            boolean watch = n == 2;
+            if (watch != watchOpen && !editMode) {
+                watchOpen = watch;
+                layoutControls(getWidth(), getHeight());
                 invalidate();
             }
             if (!SaveStates.soloMissionSeen && SaveStates.nativeCanSave()) {
@@ -244,8 +252,17 @@ public class TouchOverlay extends View {
         // the watch while in a mission (drawShortcut).
         buttons.add(new Button("GADGET", "", IC_GADGET, IN_GAME, BTN_B, -1, false, false, white, 116, 0.11f, 21));
         // Menus (front end, watch, pause): accept / back where FIRE / AIM are.
-        buttons.add(new Button("OK", "OK", IC_OK, IN_MENU, BTN_A, -1, false, false, green, 96, 0.70f, 46));
-        buttons.add(new Button("BACK", "BACK", IC_BACK, IN_MENU, BTN_B, -1, false, false, white, 205, 0.80f, 32));
+        Button ok = new Button("OK", "OK", IC_OK, IN_MENU, BTN_A, -1, false, false, green, 96, 0.70f, 46);
+        Button back = new Button("BACK", "BACK", IC_BACK, IN_MENU, BTN_B, -1, false, false, white, 205, 0.80f, 32);
+        // The watch (Start in a mission) fills the middle of the screen with
+        // its face and the health / armour arcs: OK and BACK move to the
+        // right margin, stacked, clear of the face.
+        ok.wfx = 72;
+        ok.wfy = 0.72f;
+        back.wfx = 64;
+        back.wfy = 0.40f;
+        buttons.add(ok);
+        buttons.add(back);
         // Always: START top right; options MENU and the gear top left.
         buttons.add(new Button("START", "", IC_PAUSE, ALWAYS, BTN_START, -1, false, false, white, 44, 0.11f, 22));
         buttons.add(new Button("MENU", "", IC_MENU, ALWAYS, BTN_BACK, -1, false, false, white, -96, 0.11f, 20));
@@ -383,6 +400,34 @@ public class TouchOverlay extends View {
         layoutControls(w, h);
     }
 
+    /** Order from the screen edge within a corner group (0 = outermost). */
+    private static int shortcutSlot(Button b) {
+        switch (b.key) {
+            case "MENU": return 1;
+            case "SAVES": return 2;
+            case "GADGET": return 1;
+            default: return 0;   // SETTINGS (left), START (right)
+        }
+    }
+
+    /**
+     * A punch-hole camera sits on a short edge in landscape: push only the
+     * buttons that would overlap it, sideways, out of its way.
+     */
+    private void pushOutOfCutouts(Button b, int w) {
+        for (Rect r : cutouts) {
+            float pad = 6 * dp;
+            if (b.cy + b.r > r.top - pad && b.cy - b.r < r.bottom + pad
+                    && b.cx + b.r > r.left - pad && b.cx - b.r < r.right + pad) {
+                if (r.centerX() > w / 2) {
+                    b.cx = r.left - pad - b.r;
+                } else {
+                    b.cx = r.right + pad + b.r;
+                }
+            }
+        }
+    }
+
     private void layoutControls(int w, int h) {
         if (w <= 0 || h <= 0) {
             return;
@@ -394,24 +439,25 @@ public class TouchOverlay extends View {
                 b.cy = b.userY * h;
                 continue;
             }
-            b.cx = b.fx >= 0 ? w - b.fx * dp : -b.fx * dp;
-            b.cy = b.fy * h;
-            // A punch-hole camera sits on a short edge in landscape: push only
-            // the buttons that would overlap it, sideways, out of its way.
-            for (Rect r : cutouts) {
-                float pad = 6 * dp;
-                if (b.cy + b.r > r.top - pad && b.cy - b.r < r.bottom + pad
-                        && b.cx + b.r > r.left - pad && b.cx - b.r < r.right + pad) {
-                    if (r.centerX() > w / 2) {
-                        b.cx = r.left - pad - b.r;
-                    } else {
-                        b.cx = r.right + pad + b.r;
-                    }
-                }
+            if (b.isShortcut()) {
+                // Both corner groups on one pitch that grows with the size
+                // setting: tile side 40 dp x size, 16 dp gaps, 24 dp margin.
+                int k = shortcutSlot(b);
+                float side = 40 * dp * sizeScale, off = 24 * dp + side / 2 + k * (side + 16 * dp);
+                b.cx = b.fx < 0 ? off : w - off;
+                b.cy = 24 * dp + side / 2;
+                pushOutOfCutouts(b, w);
+                continue;
             }
+            boolean watchPlace = watchOpen && !Float.isNaN(b.wfx);
+            float fx = watchPlace ? b.wfx : b.fx, fy = watchPlace ? b.wfy : b.fy;
+            b.cx = fx >= 0 ? w - fx * dp : -fx * dp;
+            b.cy = fy * h;
+            pushOutOfCutouts(b, w);
         }
         for (Button b : buttons) {
-            b.hitHalf = 24 * dp;
+            // Shortcut hit squares: at least the 48 dp target, 8 dp apart at any size.
+            b.hitHalf = Math.max(20 * dp * sizeScale + 4 * dp, 24 * dp);
         }
         stickRadius = 66 * dp * sizeScale;
         stickZoneRight = w * 0.42f;
@@ -749,6 +795,9 @@ public class TouchOverlay extends View {
 
     private void drawStick(Canvas c) {
         boolean live = stickPointer >= 0;
+        if (watchOpen && !live) {
+            return;   // keep the watch's health arc clear; the stick still appears under a thumb
+        }
         float bx, by;
         if (live) {
             bx = stickCx;
@@ -829,7 +878,8 @@ public class TouchOverlay extends View {
      * held (gold means on), the icon black on it. All five share one size.
      */
     private void drawShortcut(Canvas c, Button b) {
-        boolean on = b.down || (editMode && b == dragged);
+        // Gold means on: held, or Start while the watch it opened is up.
+        boolean on = b.down || (editMode && b == dragged) || (b.button == BTN_START && watchOpen);
         float half = 20 * dp * sizeScale;
         rect.set(b.cx - half, b.cy - half, b.cx + half, b.cy + half);
         fill.setColor(on ? alpha(Titles.GOLD, 1f) : alpha(0xA607070A, 1f));
@@ -866,9 +916,10 @@ public class TouchOverlay extends View {
                 c.drawCircle(x, y, 0.62f * h, ink);
                 c.drawCircle(x, y, 0.22f * h, ink);
                 for (int i = 0; i < 8; i++) {
-                    double a = Math.PI * 2 * i / 8;
-                    float cx = (float) Math.cos(a), sy = (float) Math.sin(a);
-                    c.drawLine(x + cx * 0.62f * h, y + sy * 0.62f * h, x + cx * 0.98f * h, y + sy * 0.98f * h, ink);
+                    c.save();
+                    c.rotate(45f * i, x, y);
+                    c.drawRect(x - 0.14f * h, y - 0.97f * h, x + 0.14f * h, y - 0.6f * h, inkFill);
+                    c.restore();
                 }
                 break;
             }
