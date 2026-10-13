@@ -78,7 +78,7 @@ public class TouchOverlay extends View {
     // Icons (drawn in drawIcon).
     private static final int IC_BULLET = 1, IC_AIM = 2, IC_HAND = 3, IC_RELOAD = 4, IC_GUN = 5,
             IC_WATCH = 6, IC_CROUCH = 7, IC_PAUSE = 8, IC_MENU = 9, IC_GEAR = 10, IC_OK = 11,
-            IC_BACK = 12, IC_DISK = 13;
+            IC_BACK = 12, IC_DISK = 13, IC_GADGET = 14;
 
     /** Opens the settings / savestate panels (GoldenEyeActivity). */
     public interface Listener {
@@ -122,9 +122,21 @@ public class TouchOverlay extends View {
 
         boolean hit(float x, float y) {
             float dx = x - cx, dy = y - cy;
+            if (isShortcut()) {
+                // Square tile; at least the 48 dp target around it.
+                float half = Math.max(r * 1.15f, hitHalf);
+                return Math.abs(dx) <= half && Math.abs(dy) <= half;
+            }
             float rr = r * 1.15f; // a little slack around the drawn circle
             return dx * dx + dy * dy <= rr * rr;
         }
+
+        /** The corner shortcuts (options, F10, saves, watch, pause): square tiles. */
+        boolean isShortcut() {
+            return icon == IC_GEAR || icon == IC_MENU || icon == IC_DISK || icon == IC_GADGET || icon == IC_PAUSE;
+        }
+
+        float hitHalf;
     }
 
     private final List<Button> buttons = new ArrayList<>();
@@ -153,11 +165,17 @@ public class TouchOverlay extends View {
 
     // What the game is doing: which set is shown.
     private int context = IN_MENU;
+    private boolean inStage;          // in a mission (playing, or its watch open)
     private final Runnable contextPoll = new Runnable() {
         @Override
         public void run() {
             int n = nativeContext();
             int c = n == 1 ? IN_GAME : n == 3 ? IN_OPTIONS : IN_MENU;
+            boolean stage = n == 1 || n == 2;
+            if (stage != inStage) {
+                inStage = stage;
+                invalidate();
+            }
             if (!SaveStates.soloMissionSeen && SaveStates.nativeCanSave()) {
                 SaveStates.soloMissionSeen = true;
             }
@@ -221,7 +239,10 @@ public class TouchOverlay extends View {
         buttons.add(new Button("GUN", "NEXT", IC_GUN, IN_GAME, BTN_Y, -1, false, false, white, 48, 0.44f, 27));
         // CROUCH in the corner under FIRE, just right of the ammo counter.
         buttons.add(new Button("CROUCH", "", IC_CROUCH, IN_GAME, BTN_LEFTSTICK, -1, false, false, white, 32, 0.92f, 22));
-        buttons.add(new Button("GADGET", "", IC_WATCH, IN_GAME, BTN_B, -1, false, false, white, 116, 0.11f, 21));
+        // B cycles the gadgets Bond carries (port D394; nothing to do without
+        // one). The watch itself is Start, as on the N64: START's tile shows
+        // the watch while in a mission (drawShortcut).
+        buttons.add(new Button("GADGET", "", IC_GADGET, IN_GAME, BTN_B, -1, false, false, white, 116, 0.11f, 21));
         // Menus (front end, watch, pause): accept / back where FIRE / AIM are.
         buttons.add(new Button("OK", "OK", IC_OK, IN_MENU, BTN_A, -1, false, false, green, 96, 0.70f, 46));
         buttons.add(new Button("BACK", "BACK", IC_BACK, IN_MENU, BTN_B, -1, false, false, white, 205, 0.80f, 32));
@@ -388,6 +409,9 @@ public class TouchOverlay extends View {
                     }
                 }
             }
+        }
+        for (Button b : buttons) {
+            b.hitHalf = 24 * dp;
         }
         stickRadius = 66 * dp * sizeScale;
         stickZoneRight = w * 0.42f;
@@ -769,6 +793,10 @@ public class TouchOverlay extends View {
     }
 
     private void drawButton(Canvas c, Button b) {
+        if (b.isShortcut()) {
+            drawShortcut(c, b);
+            return;
+        }
         boolean on = b.down || (editMode && b == dragged);
         // Dark disc, light ring and icon: readable on snow and on night levels.
         fill.setColor(on ? alpha(0xE6FFFFFF, 1f) : alpha(0x59000000, 1f));
@@ -792,6 +820,116 @@ public class TouchOverlay extends View {
             text.getTextBounds(b.label, 0, b.label.length(), textBounds);
             c.drawText(b.label, b.cx, b.cy + b.r * 0.58f - textBounds.exactCenterY(), text);
         }
+    }
+
+    /**
+     * A corner shortcut in the panels' world ("Opening Titles",
+     * android/DESIGN.md): a flat square tile, translucent near-black with an
+     * ivory hairline and icon, so it reads on snow and at night; gold when
+     * held (gold means on), the icon black on it. All five share one size.
+     */
+    private void drawShortcut(Canvas c, Button b) {
+        boolean on = b.down || (editMode && b == dragged);
+        float half = 20 * dp * sizeScale;
+        rect.set(b.cx - half, b.cy - half, b.cx + half, b.cy + half);
+        fill.setColor(on ? alpha(Titles.GOLD, 1f) : alpha(0xA607070A, 1f));
+        c.drawRect(rect, fill);
+        Paint outline = editMode ? dash : ring;
+        float sw = outline.getStrokeWidth();
+        outline.setStrokeWidth(1 * dp);
+        outline.setColor(editMode ? 0xFFFFFFFF : on ? alpha(Titles.GOLD, 1f) : alpha(0xB3F2E6C9, 1f));
+        rect.inset(0.5f * dp, 0.5f * dp);
+        c.drawRect(rect, outline);
+        outline.setStrokeWidth(sw);
+        // Start opens Bond's watch in a mission: show the watch there.
+        int icon = b.button == BTN_START && inStage ? IC_WATCH : b.icon;
+        drawTileIcon(c, icon, b.cx, b.cy, 2 * half, on ? Titles.BLACK : alpha(Titles.IVORY, 1f));
+    }
+
+    /**
+     * The shortcut icons, drawn in one geometric hand to sit with Michroma:
+     * 1.6 dp strokes, square ends and mitred corners, no rounding.
+     * {@code s}: the tile's side; the icon keeps a margin of a quarter of it.
+     */
+    private void drawTileIcon(Canvas c, int icon, float x, float y, float s, int color) {
+        Paint.Cap cap = ink.getStrokeCap();
+        Paint.Join join = ink.getStrokeJoin();
+        ink.setStrokeCap(Paint.Cap.BUTT);
+        ink.setStrokeJoin(Paint.Join.MITER);
+        ink.setStrokeWidth(1.6f * dp);
+        ink.setColor(color);
+        inkFill.setColor(color);
+        float h = s * 0.25f;   // icon half-size: the glyph spans the tile's middle half
+        switch (icon) {
+            case IC_GEAR: {
+                // Options: a ring with eight square teeth.
+                c.drawCircle(x, y, 0.62f * h, ink);
+                c.drawCircle(x, y, 0.22f * h, ink);
+                for (int i = 0; i < 8; i++) {
+                    double a = Math.PI * 2 * i / 8;
+                    float cx = (float) Math.cos(a), sy = (float) Math.sin(a);
+                    c.drawLine(x + cx * 0.62f * h, y + sy * 0.62f * h, x + cx * 0.98f * h, y + sy * 0.98f * h, ink);
+                }
+                break;
+            }
+            case IC_MENU: {
+                // The PC port's options overlay: its key, F10, in the credit face.
+                text.setTypeface(Titles.credits(getContext()));
+                text.setLetterSpacing(0.05f);
+                text.setColor(color);
+                text.setTextSize(0.72f * h);
+                text.getTextBounds("F10", 0, 3, textBounds);
+                c.drawText("F10", x, y - textBounds.exactCenterY(), text);
+                text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                text.setLetterSpacing(0f);
+                break;
+            }
+            case IC_DISK: {
+                // Saves: a floppy, square body with its cut corner, shutter and label.
+                path.reset();
+                path.moveTo(x - h, y - h);
+                path.lineTo(x + 0.6f * h, y - h);
+                path.lineTo(x + h, y - 0.6f * h);
+                path.lineTo(x + h, y + h);
+                path.lineTo(x - h, y + h);
+                path.close();
+                c.drawPath(path, ink);
+                c.drawRect(x - 0.5f * h, y - h, x + 0.3f * h, y - 0.4f * h, ink);
+                c.drawRect(x - 0.6f * h, y + 0.15f * h, x + 0.6f * h, y + h, ink);
+                break;
+            }
+            case IC_GADGET: {
+                // Next gadget: a detonator, its antenna, and a step arrow.
+                c.drawRect(x - 0.5f * h, y - 0.3f * h, x + 0.3f * h, y + h, ink);
+                c.drawLine(x - 0.3f * h, y - 0.3f * h, x - 0.3f * h, y - h, ink);
+                c.drawRect(x - 0.22f * h, y + 0.1f * h, x + 0.02f * h, y + 0.34f * h, inkFill);
+                path.reset();
+                path.moveTo(x + 0.55f * h, y - 0.75f * h);
+                path.lineTo(x + h, y - 0.45f * h);
+                path.lineTo(x + 0.55f * h, y - 0.15f * h);
+                c.drawPath(path, ink);
+                break;
+            }
+            case IC_WATCH: {
+                // The watch (Start in a mission): square straps, a round face, two hands.
+                c.drawRect(x - 0.38f * h, y - h, x + 0.38f * h, y - 0.62f * h, inkFill);
+                c.drawRect(x - 0.38f * h, y + 0.62f * h, x + 0.38f * h, y + h, inkFill);
+                c.drawCircle(x, y, 0.62f * h, ink);
+                c.drawLine(x, y, x, y - 0.38f * h, ink);
+                c.drawLine(x, y, x + 0.3f * h, y, ink);
+                break;
+            }
+            case IC_PAUSE: {
+                // Start / pause: two square bars.
+                c.drawRect(x - 0.62f * h, y - 0.8f * h, x - 0.2f * h, y + 0.8f * h, inkFill);
+                c.drawRect(x + 0.2f * h, y - 0.8f * h, x + 0.62f * h, y + 0.8f * h, inkFill);
+                break;
+            }
+            default:
+                break;
+        }
+        ink.setStrokeCap(cap);
+        ink.setStrokeJoin(join);
     }
 
     /** Simple line icons in a box of side s centred on (x, y). */
